@@ -9,10 +9,18 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  // Fail-fast on missing env vars so the user sees a clear message instead of MIDDLEWARE_INVOCATION_FAILED.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnon) {
+    return new NextResponse(
+      `Ops Assistants is misconfigured: ${!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : "NEXT_PUBLIC_SUPABASE_ANON_KEY"} is not set on this deployment. Add it in Vercel → Settings → Environment Variables and redeploy.`,
+      { status: 503, headers: { "content-type": "text/plain" } }
+    );
+  }
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
       cookies: {
         get: (name: string) => request.cookies.get(name)?.value,
         set: (name: string, value: string, options: CookieOptions) => {
@@ -22,29 +30,35 @@ export async function middleware(request: NextRequest) {
           response.cookies.set({ name, value: "", ...options });
         },
       },
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
+                       request.nextUrl.pathname.startsWith("/auth");
+
+    if (!user && !isAuthPage) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("next", request.nextUrl.pathname);
+      return NextResponse.redirect(redirectUrl);
     }
-  );
 
-  const { data: { user } } = await supabase.auth.getUser();
+    if (user && isAuthPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
 
-  const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
-                     request.nextUrl.pathname.startsWith("/auth");
-
-  if (!user && !isAuthPage) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
+    return response;
+  } catch (err: any) {
+    console.error("middleware error:", err);
+    return new NextResponse(
+      `Middleware crashed: ${err?.message ?? "unknown error"}. Check Vercel runtime logs.`,
+      { status: 500, headers: { "content-type": "text/plain" } }
+    );
   }
-
-  if (user && isAuthPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  return response;
 }
 
 export const config = {
