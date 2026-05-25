@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: request.headers } });
+  // Stamp the path on a request header so server components can detect the
+  // active route without rebroadcasting it through props/context.
+  const reqHeaders = new Headers(request.headers);
+  reqHeaders.set("x-tackle-path", request.nextUrl.pathname);
+  let response = NextResponse.next({ request: { headers: reqHeaders } });
 
   // Agent API endpoints authenticate via bearer key, not Supabase session — skip.
   if (request.nextUrl.pathname.startsWith("/api/agent")) {
@@ -14,7 +18,7 @@ export async function middleware(request: NextRequest) {
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnon) {
     return new NextResponse(
-      `Ops Assistants is misconfigured: ${!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : "NEXT_PUBLIC_SUPABASE_ANON_KEY"} is not set on this deployment. Add it in Vercel → Settings → Environment Variables and redeploy.`,
+      `Tackle Box is misconfigured: ${!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : "NEXT_PUBLIC_SUPABASE_ANON_KEY"} is not set on this deployment. Add it in Vercel → Settings → Environment Variables and redeploy.`,
       { status: 503, headers: { "content-type": "text/plain" } }
     );
   }

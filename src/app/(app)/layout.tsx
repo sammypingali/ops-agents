@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { Nav } from "@/components/nav";
+import { Shell, type OrgItem } from "@/components/nav";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -8,12 +8,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: orgs } = await admin.from("orgs").select("slug, name").order("name");
+  const { data: orgRows } = await admin
+    .from("orgs")
+    .select("slug, name, is_internal")
+    .order("is_internal", { ascending: true })  // client orgs first, internal/testing last
+    .order("name");
 
-  return (
-    <div className="flex">
-      <Nav session={session} orgs={orgs ?? []} />
-      <main className="flex-1 min-h-screen p-6">{children}</main>
-    </div>
-  );
+  const orgs: OrgItem[] = (orgRows ?? []).map((o: any) => ({
+    slug: o.slug,
+    name: o.name,
+    isInternal: o.is_internal ?? false,
+  }));
+
+  return <Shell session={session} orgs={orgs}>{children}</Shell>;
 }

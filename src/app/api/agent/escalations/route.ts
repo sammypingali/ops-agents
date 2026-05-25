@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   let slack_ts: string | undefined;
   if (parsed.data.urgency === "urgent") {
     const slackRes = await postSlackMessage({
-      text: `:rotating_light: *[${agent.name}]* ${parsed.data.summary}\n→ <${deepLink(`/escalations/${esc.id}`)}|Open in Ops Assistants>`,
+      text: `:rotating_light: *[${agent.name}]* ${parsed.data.summary}\n→ <${deepLink(`/escalations/${esc.id}`)}|Open in Tackle Box>`,
     });
     if (slackRes.ok) {
       slack_ts = slackRes.ts;

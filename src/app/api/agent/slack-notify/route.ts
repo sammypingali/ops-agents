@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const lines = [
     `*[${agent.name}]* ${parsed.data.text}`,
     contextLine ? `_${contextLine}_` : null,
-    parsed.data.deep_link_path ? `→ <${deepLink(parsed.data.deep_link_path)}|Open in Ops Assistants>` : null,
+    parsed.data.deep_link_path ? `→ <${deepLink(parsed.data.deep_link_path)}|Open in Tackle Box>` : null,
   ].filter(Boolean).join("\n");
 
   const res = await postSlackMessage({ text: lines });

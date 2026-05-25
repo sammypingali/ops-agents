@@ -22,8 +22,11 @@ export default async function SystemHealthPage() {
   ];
 
   return (
-    <div className="space-y-4 max-w-3xl">
-      <h1 className="text-2xl font-semibold">System health</h1>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="font-serif text-3xl tracking-tight">System health</h1>
+        <p className="text-sm text-muted-foreground mt-1">Connector status and last-run heartbeats.</p>
+      </div>
       <Card>
         <CardHeader><CardTitle className="text-base">Connectors</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">

@@ -4,6 +4,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
+import { OperatorChip } from "@/components/operator-chip";
+import { operatorRoles, primaryRole } from "@/lib/operator";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,7 @@ export default async function RevalidationPage({ params }: { params: { slug: str
 
   const { data: drafts } = await admin
     .from("draft_references")
-    .select("id, subject, supplier_id, material_id, quote_id, status, created_at, assigned_operator, users:users!draft_references_assigned_operator_fkey(display_name, email), agents(name)")
+    .select("id, subject, supplier_id, material_id, quote_id, status, created_at, assigned_operator, users:users!draft_references_assigned_operator_fkey(display_name, email, user_roles(role)), agents(name)")
     .eq("org_id", org.id)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -23,7 +25,7 @@ export default async function RevalidationPage({ params }: { params: { slug: str
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Revalidation</h2>
+          <h2 className="font-serif text-2xl">Revalidation</h2>
           <p className="text-sm text-muted-foreground">Quotes expiring or recently expired. Agent 02 surfaces drafts here.</p>
         </div>
       </div>
@@ -49,10 +51,10 @@ export default async function RevalidationPage({ params }: { params: { slug: str
               <TableCell className="text-muted-foreground">{d.material_id ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground">{d.quote_id ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground">{d.agents?.name ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{d.users?.display_name ?? d.users?.email ?? "—"}</TableCell>
+              <TableCell><OperatorChip name={d.users?.display_name} email={d.users?.email} role={primaryRole(operatorRoles(d.users))} /></TableCell>
               <TableCell><StatusBadge status={d.status} /></TableCell>
               <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>
-              <TableCell><Link href={`/drafts/${d.id}`} className="text-primary hover:underline text-sm">Open →</Link></TableCell>
+              <TableCell><Link href={`/work/drafts/${d.id}`} className="text-primary hover:underline text-sm">Open →</Link></TableCell>
             </TableRow>
           ))}
           {(!drafts || drafts.length === 0) && (

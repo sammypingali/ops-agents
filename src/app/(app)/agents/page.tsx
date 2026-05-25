@@ -19,10 +19,10 @@ export default async function AgentActivityPage() {
     .limit(100);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Agent activity</h1>
-        <p className="text-sm text-muted-foreground">Every run, every agent. Last 100.</p>
+        <h1 className="font-serif text-3xl tracking-tight">Agent activity</h1>
+        <p className="text-sm text-muted-foreground mt-1">Every run, every agent. Last 100.</p>
       </div>
       <Table>
         <TableHeader>

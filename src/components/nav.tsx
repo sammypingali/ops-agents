@@ -1,52 +1,159 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { headers } from "next/headers";
+import { cn } from "@/lib/utils";
+import { roleLabel, ROLE_CHIP } from "@/lib/roles";
 import type { SessionContext } from "@/lib/auth";
-import { canSeeAgentTab } from "@/lib/auth";
+import { canSeeAgentTab, hasAnyRole } from "@/lib/auth";
 import { SignOutButton } from "@/components/sign-out-button";
 
-export function Nav({ session, orgs }: { session: SessionContext; orgs: { slug: string; name: string }[] }) {
-  const showAgentTab = canSeeAgentTab(session);
+type Tab = "work" | "agents";
+
+export interface OrgItem {
+  slug: string;
+  name: string;
+  isInternal?: boolean;
+}
+
+export function Shell({
+  session,
+  orgs,
+  children,
+}: {
+  session: SessionContext;
+  orgs: OrgItem[];
+  children: React.ReactNode;
+}) {
+  const path = headers().get("x-tackle-path") ?? "/work";
+  const tab: Tab = path.startsWith("/agents") ? "agents" : "work";
+  const showAgents = canSeeAgentTab(session);
+
   return (
-    <aside className="w-60 shrink-0 border-r bg-muted/30 min-h-screen p-4 flex flex-col gap-6">
-      <div>
-        <Link href="/" className="text-lg font-semibold tracking-tight block">Ops Assistants</Link>
-        <p className="text-xs text-muted-foreground">Command Center</p>
-      </div>
-
-      <nav className="space-y-1 text-sm">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground px-2 mb-2">Ops</div>
-        <Link href="/" className="block px-2 py-1.5 rounded hover:bg-accent">Today / Inbox</Link>
-        <Link href="/cross-org" className="block px-2 py-1.5 rounded hover:bg-accent">Cross-org views</Link>
-
-        <div className="text-xs uppercase tracking-wider text-muted-foreground px-2 mt-4 mb-2">Orgs</div>
-        {orgs.length === 0 && <div className="text-xs text-muted-foreground px-2">No orgs yet</div>}
-        {orgs.map((o) => (
-          <Link key={o.slug} href={`/orgs/${o.slug}`} className="block px-2 py-1.5 rounded hover:bg-accent">
-            {o.name}
+    <div className="flex min-h-screen">
+      <aside className="w-64 shrink-0 border-r border-border bg-background flex flex-col">
+        <div className="px-5 pt-6 pb-4">
+          <Link href="/" className="block">
+            <div className="font-serif text-2xl tracking-tight">Tackle Box</div>
+            <div className="text-xs text-muted-foreground mt-0.5">A Tenkara operations hub</div>
           </Link>
-        ))}
+        </div>
 
-        {showAgentTab && (
-          <>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground px-2 mt-4 mb-2">Agents</div>
-            <Link href="/agents" className="block px-2 py-1.5 rounded hover:bg-accent">Activity feed</Link>
-            <Link href="/agents/config" className="block px-2 py-1.5 rounded hover:bg-accent">Configuration</Link>
-            <Link href="/agents/health" className="block px-2 py-1.5 rounded hover:bg-accent">System health</Link>
-          </>
+        {showAgents && (
+          <div className="px-5 pb-4">
+            <TabToggle tab={tab} />
+          </div>
         )}
 
-        <div className="text-xs uppercase tracking-wider text-muted-foreground px-2 mt-4 mb-2">Account</div>
-        <Link href="/settings/profile" className="block px-2 py-1.5 rounded hover:bg-accent">Profile</Link>
-      </nav>
+        <nav className="flex-1 px-3 text-sm space-y-0.5">
+          {tab === "work" ? (
+            <WorkNav orgs={orgs} path={path} session={session} />
+          ) : (
+            <AgentsNav path={path} />
+          )}
+        </nav>
 
-      <div className="mt-auto border-t pt-4 space-y-2">
-        <div className="text-xs text-muted-foreground truncate" title={session.email}>{session.displayName ?? session.email}</div>
-        <div className="flex flex-wrap gap-1">
-          {session.roles.map((r) => <Badge key={r} variant="secondary">{r}</Badge>)}
-          {session.status === "out_of_office" && <Badge variant="warn">OOO</Badge>}
+        <div className="mt-auto border-t border-border px-5 py-4 space-y-2">
+          <Link href="/settings/profile" className="block text-sm hover:underline">
+            <div className="font-medium">{session.displayName ?? session.email}</div>
+            <div className="text-xs text-muted-foreground truncate">{session.email}</div>
+          </Link>
+          <div className="flex flex-wrap gap-1">
+            {session.roles.map((r) => (
+              <span key={r} className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider", ROLE_CHIP[r])}>
+                {roleLabel(r)}
+              </span>
+            ))}
+            {session.status === "out_of_office" && (
+              <span className="inline-flex items-center rounded-full bg-highlight px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">OOO</span>
+            )}
+          </div>
+          <SignOutButton />
         </div>
-        <SignOutButton />
-      </div>
-    </aside>
+      </aside>
+
+      <main className="flex-1 min-h-screen">
+        <div className="px-10 py-8 max-w-6xl">{children}</div>
+      </main>
+    </div>
+  );
+}
+
+function TabToggle({ tab }: { tab: Tab }) {
+  return (
+    <div className="inline-flex rounded-full bg-secondary p-0.5 w-full">
+      <Link
+        href="/work"
+        className={cn(
+          "flex-1 text-center text-xs font-medium py-1.5 rounded-full transition-colors",
+          tab === "work" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        Your Work
+      </Link>
+      <Link
+        href="/agents"
+        className={cn(
+          "flex-1 text-center text-xs font-medium py-1.5 rounded-full transition-colors",
+          tab === "agents" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        Agents
+      </Link>
+    </div>
+  );
+}
+
+function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors",
+        active ? "bg-secondary text-foreground font-medium" : "text-foreground/80 hover:bg-secondary/60"
+      )}
+    >
+      {active && <span className="block w-1.5 h-1.5 rounded-full bg-primary" />}
+      <span className={active ? "" : "ml-3.5"}>{children}</span>
+    </Link>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 pt-4 pb-1.5 font-semibold">{children}</div>;
+}
+
+function WorkNav({ orgs, path, session }: { orgs: OrgItem[]; path: string; session: SessionContext }) {
+  const isAccountManagerOnly = hasAnyRole(session, ["account_manager"]) && !hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
+  return (
+    <>
+      <NavLink href="/work" active={path === "/work"}>Today</NavLink>
+      {!isAccountManagerOnly && (
+        <NavLink href="/work/cross-org" active={path.startsWith("/work/cross-org")}>Cross-org views</NavLink>
+      )}
+      <SectionLabel>Orgs</SectionLabel>
+      {orgs.length === 0 && <div className="text-xs text-muted-foreground px-3">No orgs synced yet</div>}
+      {orgs.map((o) => (
+        <NavLink key={o.slug} href={`/work/orgs/${o.slug}`} active={path.startsWith(`/work/orgs/${o.slug}`)}>
+          <span className={o.isInternal ? "text-muted-foreground" : ""}>
+            {o.name}
+            {o.isInternal && <span className="ml-2 text-[9px] uppercase tracking-wider bg-secondary text-muted-foreground px-1.5 py-0.5 rounded">Internal</span>}
+          </span>
+        </NavLink>
+      ))}
+    </>
+  );
+}
+
+function AgentsNav({ path }: { path: string }) {
+  const items = [
+    { href: "/agents", label: "Activity feed" },
+    { href: "/agents/config", label: "Configuration" },
+    { href: "/agents/health", label: "System health" },
+  ];
+  return (
+    <>
+      {items.map((i) => (
+        <NavLink key={i.href} href={i.href} active={path === i.href}>{i.label}</NavLink>
+      ))}
+    </>
   );
 }

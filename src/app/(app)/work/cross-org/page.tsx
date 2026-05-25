@@ -18,8 +18,8 @@ export default async function CrossOrgPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">All staged drafts</h1>
-        <p className="text-sm text-muted-foreground">Cross-org rollup. Ops leads view.</p>
+        <h1 className="font-serif text-3xl tracking-tight">All staged drafts</h1>
+        <p className="text-sm text-muted-foreground mt-1">Cross-org rollup. Lead Operators view.</p>
       </div>
       <Table>
         <TableHeader>
@@ -38,7 +38,7 @@ export default async function CrossOrgPage() {
               <TableCell>{d.orgs?.name ?? "—"}</TableCell>
               <TableCell><Badge variant="warn">{d.status}</Badge></TableCell>
               <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>
-              <TableCell><Link href={`/drafts/${d.id}`} className="text-primary hover:underline text-sm">Open →</Link></TableCell>
+              <TableCell><Link href={`/work/drafts/${d.id}`} className="text-primary hover:underline text-sm">Open →</Link></TableCell>
             </TableRow>
           ))}
           {(!drafts || drafts.length === 0) && (

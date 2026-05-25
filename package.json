@@ -1,5 +1,5 @@
 {
-  "name": "ops-assistants",
+  "name": "tackle-box",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:push": "node scripts/db-push.mjs",
-    "db:seed": "node scripts/db-seed.mjs"
+    "db:push": "node -r dotenv/config scripts/db-push.mjs dotenv_config_path=.env.local",
+    "sync:orgs": "node -r dotenv/config scripts/sync-orgs.mjs dotenv_config_path=.env.local"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

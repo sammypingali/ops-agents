@@ -18,10 +18,10 @@ export default async function AgentConfigPage() {
     .order("created_at");
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-semibold">Agent configuration</h1>
-        <p className="text-sm text-muted-foreground">Per-agent settings and Ben's stamp-of-approval gate.</p>
+        <h1 className="font-serif text-3xl tracking-tight">Agent configuration</h1>
+        <p className="text-sm text-muted-foreground mt-1">Per-agent settings and the stamp-of-approval gate.</p>
       </div>
       <div className="grid gap-4">
         {(agents ?? []).map((a: any) => (

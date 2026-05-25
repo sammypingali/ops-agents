@@ -1,13 +1,17 @@
-# Ops Assistants — Setup
+# Tackle Box — Setup
 
-Phase 1 MVP. Next.js (App Router) + Supabase + per-agent bearer-key API.
+A Tenkara internal hub: where ops works and where agents are monitored. Built on Next.js (App Router) + Supabase + a per-agent bearer-key API.
 
 ## What's in the box
 
-- **Ops tab** — Today/Inbox, per-org workspace for Meridian Foods (Overview, Revalidation, Outreach, Cases, Suppliers, Approvals, Quotes), Cross-org rollup
-- **Agent tab** (monitor + admin only) — Activity feed, Configuration (incl. Ben's stamp-of-approval gate + API-key rotation), System health
-- **Auth** — Supabase Auth with 5 roles (`admin`, `ops_lead`, `ops_operator`, `account_manager`, `monitor`); middleware redirects anonymous traffic to `/login`
-- **RBAC** — RLS policies enforce the Ops/Agent tab split
+- **Your Work tab** — Today (with daily greeting), Cross-org rollup, per-org workspaces for all real Tenkara client orgs (Overview, Revalidation, Outreach, Cases, Suppliers, Approvals, Quotes). Account managers see a filtered view.
+- **Agents tab** (Lead Operator + Admin + Monitor only) — Activity feed, Configuration (incl. stamp-of-approval gate + API-key rotation), System health
+- **Top-level tab toggle** sits in the sidebar — sidebar contents change wholesale based on the active tab so ops can't get lost in agent monitoring.
+- **Auth** — Supabase Auth with 5 roles displayed as **Admin** / **Lead Operator** / **Operator** / **Account Manager** / **Monitor**. DB enum stays as-is for back-compat.
+- **Brand** — colors and fonts derived from tenkara.ai: cream background `#F7F6F5`, near-black text `#121212`, electric blue accent `#0011FF`, Source Serif 4 for editorial headers, Inter for body.
+- **Org list** — synced from Tenkara prod read-only DB on demand via `npm run sync:orgs`. Aurora (Testing) and Tenkara (Internal Sourcing) flagged with an "Internal" tag and dimmed.
+- **Operator chips** — `<Name> · <Role>` chip used in every operator reference (drafts, cases, org overview, audit log).
+- **RBAC** — RLS policies enforce the Your Work / Agents split
 - **Agent API** under `/api/agent/*` authenticated by per-agent bearer keys:
   - `POST /api/agent/runs`, `PATCH /api/agent/runs` (register/update runs)
   - `POST /api/agent/drafts`, `GET /api/agent/drafts` (stage drafts; check for existing)
