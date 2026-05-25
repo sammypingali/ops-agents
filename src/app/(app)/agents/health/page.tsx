@@ -3,6 +3,8 @@ import { getSession, canSeeAgentTab } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { relativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +14,11 @@ export default async function SystemHealthPage() {
 
   const admin = createAdminClient();
   const { data: agents } = await admin.from("agents").select("name, slug, last_run_at, status");
-  const { data: failedExports } = await admin.from("lead_scanner_exports").select("id").eq("status", "failed");
+  const { data: leadExports } = await admin
+    .from("lead_scanner_exports")
+    .select("id, supplier_name, supplier_id, status, generated_at, slack_message_ts, error, generated_by_agent, agents:agents!lead_scanner_exports_generated_by_agent_fkey(name)")
+    .order("generated_at", { ascending: false })
+    .limit(100);
 
   const checks = [
     { name: "Supabase (OA DB)", ok: true, note: "connected (this page loaded)" },
@@ -21,14 +27,17 @@ export default async function SystemHealthPage() {
     { name: "Service role key", ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY, note: process.env.SUPABASE_SERVICE_ROLE_KEY ? "configured" : "missing" },
   ];
 
+  const failedCount = (leadExports ?? []).filter((e: any) => e.status === "failed").length;
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-serif text-3xl tracking-tight">System health</h1>
-        <p className="text-sm text-muted-foreground mt-1">Connector status and last-run heartbeats.</p>
+        <p className="text-sm text-muted-foreground mt-1">Connector status, last-run heartbeats, and the Lead Scanner handoff to Andrew.</p>
       </div>
-      <Card>
-        <CardHeader><CardTitle className="text-base">Connectors</CardTitle></CardHeader>
+
+      <Card className="tb-surface shadow-none">
+        <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">Connectors</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
           {checks.map((c) => (
             <div key={c.name} className="flex items-center justify-between">
@@ -41,25 +50,70 @@ export default async function SystemHealthPage() {
           ))}
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader><CardTitle className="text-base">Last run per agent</CardTitle></CardHeader>
+
+      <Card className="tb-surface shadow-none">
+        <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">Last run per agent</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
+          {(agents ?? []).length === 0 && <p className="text-muted-foreground">No agents registered.</p>}
           {(agents ?? []).map((a: any) => (
             <div key={a.slug} className="flex items-center justify-between">
               <span>{a.name}</span>
-              <span className="text-muted-foreground text-xs">{a.last_run_at ?? "never"}</span>
+              <span className="text-muted-foreground text-xs">{a.last_run_at ? relativeTime(a.last_run_at) : "never"}</span>
             </div>
           ))}
         </CardContent>
       </Card>
-      {failedExports && failedExports.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Lead Scanner exports needing attention</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-sm">{failedExports.length} export(s) unacknowledged &gt;72h by Andrew.</p>
-          </CardContent>
-        </Card>
-      )}
+
+      <Card className="tb-surface shadow-none">
+        <CardHeader>
+          <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">
+            Lead Scanner exports{" "}
+            <span className="ml-1 text-foreground">· {leadExports?.length ?? 0}</span>
+            {failedCount > 0 && <Badge variant="danger" className="ml-2">{failedCount} failed</Badge>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(leadExports ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No exports yet. Agents send CSVs to Andrew via <code className="text-xs">/api/agent/lead-exports</code>.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Generated</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(leadExports as any[]).map((e) => (
+                  <TableRow key={e.id} className={e.status === "failed" ? "bg-destructive/5" : undefined}>
+                    <TableCell className="font-medium">{e.supplier_name ?? e.supplier_id ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{e.agents?.name ?? "—"}</TableCell>
+                    <TableCell><ExportStatus s={e.status} /></TableCell>
+                    <TableCell className="text-muted-foreground">{relativeTime(e.generated_at)}</TableCell>
+                    <TableCell className="text-right text-xs">
+                      {e.slack_message_ts && (
+                        <span className="text-muted-foreground font-mono">{e.slack_message_ts.slice(0, 14)}</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function ExportStatus({ s }: { s: string }) {
+  if (s === "queued") return <Badge variant="secondary">Queued</Badge>;
+  if (s === "sent") return <Badge variant="warn">Sent to Andrew</Badge>;
+  if (s === "acknowledged_by_andrew") return <Badge variant="default">✓ Ack'd</Badge>;
+  if (s === "uploaded") return <Badge variant="success">Uploaded</Badge>;
+  if (s === "failed") return <Badge variant="danger">Failed (&gt;72h)</Badge>;
+  return <Badge variant="secondary">{s}</Badge>;
 }

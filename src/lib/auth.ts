@@ -19,7 +19,7 @@ export async function getSession(): Promise<SessionContext | null> {
   // Use service-role to fetch profile + roles to avoid an RLS round-trip.
   const admin = createAdminClient();
   const [{ data: profile }, { data: roleRows }] = await Promise.all([
-    admin.from("users").select("display_name, status, email").eq("id", user.id).maybeSingle(),
+    admin.from("users").select("display_name, status, email, last_login_at, deactivated_at").eq("id", user.id).maybeSingle(),
     admin.from("user_roles").select("role").eq("user_id", user.id),
   ]);
 
@@ -29,7 +29,15 @@ export async function getSession(): Promise<SessionContext | null> {
       id: user.id,
       email: user.email ?? "",
       display_name: user.user_metadata?.name ?? null,
+      last_login_at: new Date().toISOString(),
     });
+  } else {
+    // Bump last_login_at lazily — only if it's missing or > 1 hour stale.
+    // This is cheap and lets the Operators page show real activity without a hot write loop.
+    const last = profile.last_login_at ? new Date(profile.last_login_at).getTime() : 0;
+    if (Date.now() - last > 3600 * 1000) {
+      await admin.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", user.id);
+    }
   }
 
   return {

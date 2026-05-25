@@ -123,11 +123,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function WorkNav({ orgs, path, session }: { orgs: OrgItem[]; path: string; session: SessionContext }) {
   const isAccountManagerOnly = hasAnyRole(session, ["account_manager"]) && !hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
+  const canManageOperators = hasAnyRole(session, ["admin", "ops_lead"]);
   return (
     <>
       <NavLink href="/work" active={path === "/work"}>Today</NavLink>
       {!isAccountManagerOnly && (
-        <NavLink href="/work/cross-org" active={path.startsWith("/work/cross-org")}>Cross-org views</NavLink>
+        <>
+          <NavLink href="/work/cross-org" active={path === "/work/cross-org"}>Cross-org views</NavLink>
+          <NavLink href="/work/exports" active={path.startsWith("/work/exports")}>Exports (30d)</NavLink>
+        </>
       )}
       <SectionLabel>Orgs</SectionLabel>
       {orgs.length === 0 && <div className="text-xs text-muted-foreground px-3">No orgs synced yet</div>}
@@ -139,6 +143,12 @@ function WorkNav({ orgs, path, session }: { orgs: OrgItem[]; path: string; sessi
           </span>
         </NavLink>
       ))}
+      {canManageOperators && (
+        <>
+          <SectionLabel>Team</SectionLabel>
+          <NavLink href="/operators" active={path.startsWith("/operators")}>Operators</NavLink>
+        </>
+      )}
     </>
   );
 }
