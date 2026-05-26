@@ -20,6 +20,15 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // Ad-hoc single-agent trigger: /api/cron?slug=<agent-slug> runs that agent
+  // regardless of schedule. Same CRON_SECRET auth — no new endpoint.
+  const explicitSlug = new URL(request.url).searchParams.get("slug");
+  if (explicitSlug) {
+    const r = await executeAgentRun({ agentSlug: explicitSlug, triggerSource: "manual" });
+    return NextResponse.json({ explicit: true, slug: explicitSlug, result: r, at: new Date().toISOString() });
+  }
+
   const { data: agents } = await admin
     .from("agents")
     .select("id, slug, name, schedule_cron, last_run_at, locked_until, runtime")
