@@ -10,7 +10,7 @@ import { CronExpressionParser } from "cron-parser";
 // Auth: Vercel sets the Authorization header to `Bearer ${process.env.CRON_SECRET}`
 // for cron-triggered requests; manual hits with the same header also work.
 
-export const maxDuration = 900;
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const expected = process.env.CRON_SECRET;

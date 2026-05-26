@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Triggers a manual run of an embedded agent. Admin/Monitor only.
 // Long-running: kicks off the run with waitUntil and immediately returns the run_id
 // so the UI can poll for events without blocking on the response.
-export const maxDuration = 900; // 15 minutes (Vercel Pro Serverless)
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest, { params }: { params: { slug: string } }) {
   const session = await getSession();
