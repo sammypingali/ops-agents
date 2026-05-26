@@ -3,4 +3,4 @@
 // in any process that needs it (cron handler, /api/agents/run, etc.).
 
 import "./ping";
-// import "./quote-revalidation"; // Phase G2
+import "./quote-revalidation";
