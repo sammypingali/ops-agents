@@ -20,13 +20,29 @@ export async function executeAgentRun(opts: {
   if (!def) return { ok: false, error: `agent ${opts.agentSlug} not registered in embedded runtime` };
 
   const admin = createAdminClient();
-  const lockUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const now = new Date();
+  const lockUntil = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+
+  // Reap orphans: any agent_runs left in `running` whose run_started_at is
+  // older than the function timeout (300s) were killed by Vercel without
+  // finalizing. Mark them failed so the UI and reports are honest.
+  const orphanCutoff = new Date(now.getTime() - 6 * 60 * 1000).toISOString();
+  await admin
+    .from("agent_runs")
+    .update({
+      status: "failure",
+      summary: "function timed out before completion",
+      run_finished_at: now.toISOString(),
+    })
+    .eq("status", "running")
+    .lt("run_started_at", orphanCutoff)
+    .is("run_finished_at", null);
 
   const { data: agent, error: lockError } = await admin
     .from("agents")
     .update({ locked_until: lockUntil, status: "running" })
     .eq("slug", opts.agentSlug)
-    .or(`locked_until.is.null,locked_until.lt.${new Date().toISOString()}`)
+    .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
     .select("id, slug, name")
     .maybeSingle();
   if (lockError) return { ok: false, error: lockError.message };
