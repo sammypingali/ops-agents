@@ -6,6 +6,7 @@ import { relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { OperatorChip } from "@/components/operator-chip";
 import { operatorRoles, primaryRole } from "@/lib/operator";
+import { resolveSupplierNames, resolveMaterialNames, resolveQuoteRefs } from "@/lib/tenkara-names";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,20 @@ export default async function RevalidationPage({ params }: { params: { slug: str
     .eq("org_id", org.id)
     .order("created_at", { ascending: false })
     .limit(100);
+
+  const rows = drafts ?? [];
+  let supplierNames = new Map<string, string>();
+  let materialNames = new Map<string, string>();
+  let quoteRefs = new Map<string, string>();
+  try {
+    [supplierNames, materialNames, quoteRefs] = await Promise.all([
+      resolveSupplierNames(rows.map((d: any) => d.supplier_id).filter(Boolean)),
+      resolveMaterialNames(rows.map((d: any) => d.material_id).filter(Boolean)),
+      resolveQuoteRefs(rows.map((d: any) => d.quote_id).filter(Boolean)),
+    ]);
+  } catch {
+    // Fall back to UUID prefixes if Tenkara is unreachable.
+  }
 
   return (
     <div className="space-y-4">
@@ -44,20 +59,31 @@ export default async function RevalidationPage({ params }: { params: { slug: str
           </TableRow>
         </TableHeader>
         <TableBody>
-          {(drafts ?? []).map((d: any) => (
+          {rows.map((d: any) => {
+            const supplierName = d.supplier_id ? supplierNames.get(d.supplier_id) : null;
+            const materialName = d.material_id ? materialNames.get(d.material_id) : null;
+            const quoteRef = d.quote_id ? quoteRefs.get(d.quote_id) : null;
+            return (
             <TableRow key={d.id}>
               <TableCell className="font-medium">{d.subject ?? "(no subject)"}</TableCell>
-              <TableCell className="text-muted-foreground">{d.supplier_id ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{d.material_id ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{d.quote_id ?? "—"}</TableCell>
+              <TableCell title={d.supplier_id ?? undefined}>
+                {supplierName ?? (d.supplier_id ? <code className="text-xs text-muted-foreground">{d.supplier_id.slice(0, 8)}…</code> : "—")}
+              </TableCell>
+              <TableCell title={d.material_id ?? undefined}>
+                {materialName ?? (d.material_id ? <code className="text-xs text-muted-foreground">{d.material_id.slice(0, 8)}…</code> : "—")}
+              </TableCell>
+              <TableCell title={d.quote_id ?? undefined}>
+                {quoteRef ?? (d.quote_id ? <code className="text-xs text-muted-foreground">{d.quote_id.slice(0, 8)}…</code> : "—")}
+              </TableCell>
               <TableCell className="text-muted-foreground">{d.agents?.name ?? "—"}</TableCell>
               <TableCell><OperatorChip name={d.users?.display_name} email={d.users?.email} role={primaryRole(operatorRoles(d.users))} /></TableCell>
               <TableCell><StatusBadge status={d.status} /></TableCell>
               <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>
               <TableCell><Link href={`/work/drafts/${d.id}`} className="text-primary hover:underline text-sm">Open →</Link></TableCell>
             </TableRow>
-          ))}
-          {(!drafts || drafts.length === 0) && (
+          );
+          })}
+          {rows.length === 0 && (
             <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No revalidation drafts yet. Agent 02 will populate this.</TableCell></TableRow>
           )}
         </TableBody>

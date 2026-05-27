@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cn } from "@/lib/utils";
+import { OrgSubnav } from "@/components/org-subnav";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +25,6 @@ export default async function OrgLayout({
   const { data: org } = await admin.from("orgs").select("id, slug, name, is_internal").eq("slug", params.slug).maybeSingle();
   if (!org) notFound();
 
-  const path = headers().get("x-tackle-path") ?? "";
   const base = `/work/orgs/${org.slug}`;
 
   return (
@@ -41,24 +38,7 @@ export default async function OrgLayout({
           </p>
         </div>
       </header>
-      <nav className="flex gap-1 text-sm">
-        {sections.map((s) => {
-          const href = `${base}${s.href}`;
-          const active = s.href === "" ? path === base : path === href || path.startsWith(href + "/");
-          return (
-            <Link
-              key={s.href}
-              href={href}
-              className={cn(
-                "px-3 py-1.5 rounded-md transition-colors",
-                active ? "bg-secondary text-foreground font-medium" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-              )}
-            >
-              {s.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <OrgSubnav base={base} sections={sections} />
       <div>{children}</div>
     </div>
   );
