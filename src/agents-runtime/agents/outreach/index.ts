@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createMissiveDraft, missiveDraftLink } from "@/lib/missive";
 import { classifyClient, MISSIVE_ORGANIZATION_ID, MISSIVE_TEAM_ID } from "../quote-revalidation/config";
 import { composeOutreachDraft } from "./drafter";
+import { bodyToHtml } from "@/lib/email-style";
+import { suppliersWithPriorRelationship } from "@/lib/tenkara-relationships";
 
 // v1 trim (vs. full spec):
 //   - pre-outreach only. Reply tracking + follow-up cadence land with Agent 08.
@@ -159,10 +161,58 @@ registerAgent({
       return;
     }
 
-    // 4. Dedup against existing staged drafts (same supplier × material × agent).
+    // 4a. Drop candidates where the supplier already has a relationship with the
+    //     org (any prior material_quotes row in Tenkara). An initial-RFQ email
+    //     would be wrong — these need a re-engagement template, not a cold ask.
+    let priorRelSkipped = 0;
+    const byOrg = new Map<string, Candidate[]>();
+    for (const c of candidates) {
+      const arr = byOrg.get(c.lead.org_id!) ?? [];
+      arr.push(c);
+      byOrg.set(c.lead.org_id!, arr);
+    }
+    const candidatesNoPrior: Candidate[] = [];
+    for (const [orgId, group] of byOrg) {
+      const org = orgsById.get(orgId);
+      const tenkaraOrgId = org?.tenkara_org_id ?? null;
+      if (!tenkaraOrgId) {
+        // No Tenkara mapping → we can't verify prior relationship. Be safe and
+        // skip drafting; Agent 03 should have populated this for active orgs.
+        for (const c of group) priorRelSkipped++;
+        await ctx.log(`Org ${org?.name ?? orgId} has no tenkara_org_id — skipping ${group.length} candidates`, {
+          level: "warn", step: "prior_relationship",
+        });
+        continue;
+      }
+      const supplierIds = group.map((c) => c.lead.supplier_id).filter(Boolean) as string[];
+      let priorSet: Set<string>;
+      try {
+        priorSet = await suppliersWithPriorRelationship(supplierIds, tenkaraOrgId);
+      } catch (e: any) {
+        await ctx.log(`Prior-relationship check failed for org ${org?.name}: ${e.message}`, {
+          level: "error", step: "prior_relationship",
+        });
+        // Fail closed — don't send cold emails to suppliers we can't verify.
+        priorRelSkipped += group.length;
+        continue;
+      }
+      for (const c of group) {
+        if (c.lead.supplier_id && priorSet.has(c.lead.supplier_id)) {
+          priorRelSkipped++;
+          continue;
+        }
+        candidatesNoPrior.push(c);
+      }
+    }
+    await ctx.log(
+      `Prior-relationship filter: ${candidatesNoPrior.length} kept · ${priorRelSkipped} skipped (already-known suppliers)`,
+      { step: "prior_relationship" }
+    );
+
+    // 4b. Dedup against existing staged drafts (same supplier × material × agent).
     const cleanCandidates: Candidate[] = [];
     let dedupSkipped = 0;
-    for (const c of candidates) {
+    for (const c of candidatesNoPrior) {
       if (cleanCandidates.length >= maxDrafts) break;
       const { data: existing } = await admin
         .from("draft_references")
@@ -211,7 +261,7 @@ registerAgent({
       try {
         missiveDraft = await createMissiveDraft({
           subject: draft.subject,
-          body: draft.body,
+          body: bodyToHtml(draft.body),
           to_fields: [{ name: c.contactName ?? "", address: c.email }],
           organization: MISSIVE_ORGANIZATION_ID,
           team: MISSIVE_TEAM_ID,
@@ -300,6 +350,7 @@ registerAgent({
     ctx.setSummary(
       `Staged ${staged} Missive draft${staged === 1 ? "" : "s"} · promoted ${promoted} to ready_for_outreach` +
         (missiveErrors ? ` · ${missiveErrors} Missive errors` : "") +
+        (priorRelSkipped ? ` · skipped ${priorRelSkipped} existing-relationship` : "") +
         (dedupSkipped ? ` · skipped ${dedupSkipped} already-staged` : "") +
         (droppedNoEmail || droppedNoOrg || droppedSkipClient
           ? ` · dropped ${droppedNoEmail + droppedNoOrg + droppedSkipClient} pre-filter`

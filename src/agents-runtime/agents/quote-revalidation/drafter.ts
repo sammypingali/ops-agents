@@ -14,7 +14,7 @@ Example A (initial outreach):
   ${""}
   Do you supply this? If so, could you kindly share current pricing, estimated lead times, and MOQs?
   ${""}
-  We may have follow-up questions as we go along. Quick responses are always appreciated.
+  We may have follow-up questions as we go along, and any context you can share is helpful.
   ${""}
   Thanks,
   ${""}

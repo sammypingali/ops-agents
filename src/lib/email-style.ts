@@ -31,3 +31,21 @@ function clean(text: string): string {
 export function sanitizeDraft<T extends { subject: string; body: string }>(d: T): T {
   return { ...d, subject: clean(d.subject), body: clean(d.body) };
 }
+
+// Missive renders a plain `\n`-separated body as one collapsed paragraph.
+// Convert to minimal HTML: each blank-line-separated block becomes a <p>,
+// single newlines inside a block become <br>. HTML-escape everything first.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function bodyToHtml(plainBody: string): string {
+  const paragraphs = plainBody
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return paragraphs
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("\n");
+}

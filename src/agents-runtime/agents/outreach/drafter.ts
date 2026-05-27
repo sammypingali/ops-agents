@@ -46,7 +46,7 @@ export function composeOutreachDraft(input: DraftInput): ComposedDraft {
     "",
     "Additionally, if you have a product catalog, please share it. We're evaluating suppliers across multiple raw materials and will share what you carry with the rest of our procurement team.",
     "",
-    "We may have follow-up questions as we go along. Quick responses are always appreciated.",
+    "We may have follow-up questions as we go along, and any context you can share is helpful.",
     "",
     "Thanks,",
     "",
