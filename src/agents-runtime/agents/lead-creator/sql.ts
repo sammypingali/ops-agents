@@ -15,6 +15,9 @@ export interface MaterialRow {
   inci: string | null;
   created_at: string;
   user_id: string | null;
+  // Tenkara organization the material belongs to (resolved via users.organization_id).
+  // The agent maps this to an OA org_id through orgs.tenkara_org_id before insert.
+  tenkara_org_id: string | null;
 }
 
 export interface CandidateSupplier {
@@ -33,10 +36,17 @@ export interface CandidateSupplier {
 // explicitly so manual triggers can backfill.
 export async function queryRecentMaterials(since: string): Promise<MaterialRow[]> {
   return tenkaraQuery<MaterialRow>(
-    `select id, name, trade_name, inci, created_at, user_id
-       from public.materials
-      where created_at >= $1::timestamptz
-      order by created_at desc
+    `select m.id,
+            m.name,
+            m.trade_name,
+            m.inci,
+            m.created_at,
+            m.user_id,
+            u.organization_id as tenkara_org_id
+       from public.materials m
+       left join public.users u on u.id = m.user_id
+      where m.created_at >= $1::timestamptz
+      order by m.created_at desc
       limit 200`,
     [since]
   );

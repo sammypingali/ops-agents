@@ -112,6 +112,15 @@ registerAgent({
     );
     await ctx.log(`Loaded ${mirrorPairs.size} (supplier,material) mirror pairs for dedup`, { step: "dedup" });
 
+    // 3b. Build Tenkara→OA org map (orgs.tenkara_org_id is the join key).
+    //     Cached for the run so we make one round-trip total.
+    const { data: orgRows } = await admin.from("orgs").select("id, tenkara_org_id");
+    const tenkaraOrgToOaOrg = new Map<string, string>();
+    for (const r of (orgRows ?? []) as { id: string; tenkara_org_id: string | null }[]) {
+      if (r.tenkara_org_id) tenkaraOrgToOaOrg.set(r.tenkara_org_id, r.id);
+    }
+    await ctx.log(`Loaded ${tenkaraOrgToOaOrg.size} tenkara→OA org mappings`, { step: "org_map" });
+
     // 4. Check BrowserBase config — agent must not fail if absent.
     const browserbaseEnabled = !!process.env.BROWSERBASE_API_KEY;
     if (!browserbaseEnabled) {
@@ -183,9 +192,24 @@ registerAgent({
         continue;
       }
 
+      // Resolve OA org_id from the material's Tenkara organization. Null if
+      // the org isn't registered in OA yet — we still stage the lead, it just
+      // shows as "cross-org" in the UI until the org is onboarded.
+      const oaOrgId = material.tenkara_org_id
+        ? tenkaraOrgToOaOrg.get(material.tenkara_org_id) ?? null
+        : null;
+      if (material.tenkara_org_id && !oaOrgId) {
+        await ctx.log(`No OA org mapping for tenkara_org_id=${material.tenkara_org_id}; staging unscoped`, {
+          step: "org_map",
+          level: "warn",
+          data: { material_id: material.id, tenkara_org_id: material.tenkara_org_id },
+        });
+      }
+
       // Build insert rows.
       const budget = MAX_NEW_LEADS_PER_RUN - leadsCreated;
       const toInsert = fresh.slice(0, budget).map((c) => ({
+        org_id: oaOrgId,
         supplier_name: c.supplier_name,
         supplier_id: c.supplier_id,
         material_name: matLabel,
@@ -201,6 +225,7 @@ registerAgent({
           supplier_country: c.supplier_country,
           signal: c.signal,
           signal_count: c.signal_count,
+          tenkara_org_id: material.tenkara_org_id,
         },
         confidence_score: scoreCandidate(c),
         agent_run_id: ctx.runId,
