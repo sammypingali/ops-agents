@@ -9,9 +9,19 @@ import { queryRecentMaterials, findCandidatesForMaterial, type CandidateSupplier
 //   - cap 50 new leads per run.
 //   - lookback window defaults to 4h but reads `last successful run` from
 //     agent_runs so a missed cron doesn't drop materials.
+// Override via env (LEAD_CREATOR_LOOKBACK_HOURS) for ops backfills or first-run
+// testing — when set, takes precedence over the "since last successful run"
+// logic. Production cron stays at the 4h cadence the spec asks for.
 const DEFAULT_LOOKBACK_HOURS = 4;
 const RECENT_MIRROR_DAYS = 90;
 const MAX_NEW_LEADS_PER_RUN = 50;
+
+function envOverrideLookbackHours(): number | null {
+  const v = process.env.LEAD_CREATOR_LOOKBACK_HOURS;
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 // Confidence model (deterministic, no LLM in v1):
 //   quoted_same_material → 0.90 + 0.01 per extra quote (capped 0.98)
@@ -59,10 +69,16 @@ registerAgent({
       .limit(1)
       .maybeSingle();
 
-    const since = lastRun?.run_started_at
+    const override = envOverrideLookbackHours();
+    const since = override
+      ? new Date(Date.now() - override * 3600 * 1000)
+      : lastRun?.run_started_at
       ? new Date(lastRun.run_started_at)
       : new Date(Date.now() - DEFAULT_LOOKBACK_HOURS * 3600 * 1000);
-    await ctx.log(`Pulling materials added since ${since.toISOString()}`, { step: "query" });
+    await ctx.log(
+      `Pulling materials added since ${since.toISOString()} (${override ? `env override ${override}h` : lastRun ? "since last success" : `default ${DEFAULT_LOOKBACK_HOURS}h`})`,
+      { step: "query" }
+    );
 
     // 2. Pull recent materials from Tenkara prod.
     let materials: MaterialRow[];
