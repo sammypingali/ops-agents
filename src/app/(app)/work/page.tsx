@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { relativeTime } from "@/lib/utils";
+import { resolveSupplierNames, resolveMaterialNames } from "@/lib/tenkara-names";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,22 @@ export default async function TodayInboxPage() {
     .order("run_started_at", { ascending: false })
     .limit(5);
 
+  // Resolve supplier/material UUIDs to display names via Tenkara prod
+  // (read-only). draft_references stores IDs only — names live over there.
+  const allDrafts = [...(assignedDrafts ?? []), ...(unassignedDrafts ?? [])];
+  const supplierIds = allDrafts.map((d: any) => d.supplier_id).filter(Boolean);
+  const materialIds = allDrafts.map((d: any) => d.material_id).filter(Boolean);
+  let supplierNames = new Map<string, string>();
+  let materialNames = new Map<string, string>();
+  try {
+    [supplierNames, materialNames] = await Promise.all([
+      resolveSupplierNames(supplierIds),
+      resolveMaterialNames(materialIds),
+    ]);
+  } catch {
+    // If Tenkara is unreachable, fall back to UUIDs rather than failing the page.
+  }
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = session.displayName?.split(" ")[0] ?? null;
@@ -60,7 +77,7 @@ export default async function TodayInboxPage() {
         </CardHeader>
         <CardContent>
           {assignedDrafts && assignedDrafts.length > 0 ? (
-            <DraftTable rows={assignedDrafts as any} />
+            <DraftTable rows={assignedDrafts as any} supplierNames={supplierNames} materialNames={materialNames} />
           ) : (
             <p className="text-sm text-muted-foreground">Nothing assigned. Take a look at unassigned items below.</p>
           )}
@@ -73,7 +90,7 @@ export default async function TodayInboxPage() {
         </CardHeader>
         <CardContent>
           {unassignedDrafts && unassignedDrafts.length > 0 ? (
-            <DraftTable rows={unassignedDrafts as any} />
+            <DraftTable rows={unassignedDrafts as any} supplierNames={supplierNames} materialNames={materialNames} />
           ) : (
             <p className="text-sm text-muted-foreground">Inbox zero — nothing waiting for pickup.</p>
           )}
@@ -115,7 +132,15 @@ export default async function TodayInboxPage() {
   );
 }
 
-function DraftTable({ rows }: { rows: any[] }) {
+function DraftTable({
+  rows,
+  supplierNames,
+  materialNames,
+}: {
+  rows: any[];
+  supplierNames: Map<string, string>;
+  materialNames: Map<string, string>;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -129,16 +154,24 @@ function DraftTable({ rows }: { rows: any[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((d) => (
-          <TableRow key={d.id}>
-            <TableCell className="font-medium">{d.subject ?? "(no subject)"}</TableCell>
-            <TableCell>{d.orgs?.name ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground">{d.supplier_id ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground">{d.material_id ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>
-            <TableCell><Link href={`/work/drafts/${d.id}`} className="text-primary hover:underline text-sm">Review →</Link></TableCell>
-          </TableRow>
-        ))}
+        {rows.map((d) => {
+          const supplierName = d.supplier_id ? supplierNames.get(d.supplier_id) : null;
+          const materialName = d.material_id ? materialNames.get(d.material_id) : null;
+          return (
+            <TableRow key={d.id}>
+              <TableCell className="font-medium">{d.subject ?? "(no subject)"}</TableCell>
+              <TableCell>{d.orgs?.name ?? "—"}</TableCell>
+              <TableCell title={d.supplier_id ?? undefined}>
+                {supplierName ?? (d.supplier_id ? <code className="text-xs text-muted-foreground">{d.supplier_id.slice(0, 8)}…</code> : "—")}
+              </TableCell>
+              <TableCell title={d.material_id ?? undefined}>
+                {materialName ?? (d.material_id ? <code className="text-xs text-muted-foreground">{d.material_id.slice(0, 8)}…</code> : "—")}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>
+              <TableCell><Link href={`/work/drafts/${d.id}`} className="text-primary hover:underline text-sm">Review →</Link></TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
