@@ -25,9 +25,12 @@ export default function LoginForm() {
       if (error) setMsg(error.message);
       else window.location.assign(next);
     } else {
+      // Prefer the stable prod URL so magic links don't bake in a preview-deployment
+      // origin that later 404s. Fall back to window.location only in local dev.
+      const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || window.location.origin;
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+        options: { emailRedirectTo: `${base}/auth/callback?next=${encodeURIComponent(next)}` },
       });
       if (error) setMsg(error.message);
       else setMsg("Check your email for the sign-in link.");
