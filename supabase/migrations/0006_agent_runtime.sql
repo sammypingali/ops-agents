@@ -22,11 +22,14 @@ create table if not exists public.agent_run_events (
 create index if not exists agent_run_events_run_idx on public.agent_run_events(run_id, at);
 
 -- The ping agent — a no-op embedded agent that proves the loop end-to-end.
+-- Uses the final 'agent-01-ping' slug directly so re-running migrations doesn't
+-- re-create the legacy 'ping' row (which 0008 would then try to rename into a
+-- duplicate of the already-renamed row).
 insert into public.agents (slug, name, description, runtime, training_wheels_mode, stamp_of_approval, schedule_cron, prompt)
 values (
-  'ping',
-  'Ping',
-  'A no-op runtime check. Writes a heartbeat event every time it runs. Use this to verify the embedded runtime is alive.',
+  'agent-01-ping',
+  'Agent 01 - Ping',
+  'Infrastructure heartbeat agent. Runs on a schedule and POSTs to /api/runs to verify the SuperAgent ↔ Ops Assistants pipeline is intact. No real workflow logic. Used as the system liveness check.',
   'embedded',
   false,
   true,
