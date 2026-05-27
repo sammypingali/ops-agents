@@ -41,6 +41,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
         </p>
       </div>
 
+      <div className="rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Agent-written.</span>{" "}
+        Every row on this page was created by an agent — no human writes here. <code>raw</code> rows come straight from Agent 03's last cron run.
+        Read-only for now; human review tooling (promote / drop) ships with Agent 06 (Data Enrichment).
+      </div>
+
       <div className="flex gap-2 text-sm">
         {STAGES.map((s) => (
           <Link
@@ -106,9 +112,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
                 <TableCell className="text-muted-foreground">{relativeTime(r.created_at)}</TableCell>
                 <TableCell>
                   {r.agent_run_id ? (
-                    <Link href={`/agents/runs/${r.agent_run_id}`} className="text-primary hover:underline text-xs">
-                      run →
-                    </Link>
+                    <a
+                      href={`/agents/runs/${r.agent_run_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-muted"
+                      title="Open the agent run that created this lead (new tab)"
+                    >
+                      run ↗
+                    </a>
                   ) : "—"}
                 </TableCell>
               </TableRow>
