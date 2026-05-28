@@ -16,8 +16,8 @@ import type { MaterialRow } from "./sql";
 // we just instruct it on what to look for and ask for a structured response.
 
 const MODEL = "claude-opus-4-5";
-const MAX_WEB_USES = 10;       // cap per material to keep cost bounded
-const MAX_OUTPUT_TOKENS = 4096;
+const MAX_WEB_USES = 18;       // cap per material to keep cost bounded
+const MAX_OUTPUT_TOKENS = 8192;
 const URL_PROBE_TIMEOUT_MS = 5_000;
 
 export interface ScoutSupplier {
@@ -72,7 +72,7 @@ Return ONLY a JSON code block (no prose around it) with this exact shape:
 \`\`\`
 
 Rules:
-- Cap at 12 suppliers per material — quality over quantity.
+- Return up to 25 suppliers per material. Prioritize quality, but don't artificially stop at a low number if more legitimate B2B candidates exist.
 - Skip suppliers without a usable public URL.
 - Do NOT include retail consumer brands (Amazon listings, eBay, Walmart, Etsy).
 - Do NOT fabricate URLs — only include URLs you actually visited via web_search.
