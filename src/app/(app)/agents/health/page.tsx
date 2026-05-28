@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { relativeTime } from "@/lib/utils";
+import { compareAgentsBySlug } from "@/lib/agents-sort";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ export default async function SystemHealthPage() {
   if (!canSeeAgentTab(session)) redirect("/");
 
   const admin = createAdminClient();
-  const { data: agents } = await admin.from("agents").select("name, slug, last_run_at, status");
+  const { data: agentsRaw } = await admin.from("agents").select("name, slug, last_run_at, status");
+  const agents = [...(agentsRaw ?? [])].sort(compareAgentsBySlug);
   const { data: leadExports } = await admin
     .from("lead_scanner_exports")
     .select("id, supplier_name, supplier_id, status, generated_at, slack_message_ts, error, generated_by_agent, agents:agents!lead_scanner_exports_generated_by_agent_fkey(name)")
@@ -54,8 +56,8 @@ export default async function SystemHealthPage() {
       <Card className="tb-surface shadow-none">
         <CardHeader><CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">Last run per agent</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {(agents ?? []).length === 0 && <p className="text-muted-foreground">No agents registered.</p>}
-          {(agents ?? []).map((a: any) => (
+          {agents.length === 0 && <p className="text-muted-foreground">No agents registered.</p>}
+          {agents.map((a: any) => (
             <div key={a.slug} className="flex items-center justify-between">
               <span>{a.name}</span>
               <span className="text-muted-foreground text-xs">{a.last_run_at ? relativeTime(a.last_run_at) : "never"}</span>

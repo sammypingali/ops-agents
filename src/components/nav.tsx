@@ -46,6 +46,9 @@ export function Shell({
         </nav>
 
         <div className="mt-auto border-t border-border px-5 py-4 space-y-2">
+          <Link href="/how-it-works" className="block text-xs text-muted-foreground hover:text-foreground hover:underline">
+            How Tackle Box works →
+          </Link>
           <Link href="/settings/profile" className="block text-sm hover:underline">
             <div className="font-medium">{session.displayName ?? session.email}</div>
             <div className="text-xs text-muted-foreground truncate">{session.email}</div>
