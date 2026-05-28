@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getAssignedOrgIds } from "@/lib/org-access";
+import { DraftSignals } from "@/components/draft-signals";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function CrossOrgPage() {
   const admin = createAdminClient();
   let q = admin
     .from("draft_references")
-    .select("id, subject, status, created_at, org_id, orgs(slug, name)")
+    .select("id, subject, status, created_at, org_id, metadata, orgs(slug, name)")
     .eq("status", "staged")
     .order("created_at", { ascending: false })
     .limit(50);
@@ -50,7 +51,12 @@ export default async function CrossOrgPage() {
         <TableBody>
           {(drafts ?? []).map((d: any) => (
             <TableRow key={d.id}>
-              <TableCell className="font-medium">{d.subject ?? "(no subject)"}</TableCell>
+              <TableCell className="font-medium">
+                <div className="flex flex-col gap-1">
+                  <span>{d.subject ?? "(no subject)"}</span>
+                  <DraftSignals metadata={d.metadata} />
+                </div>
+              </TableCell>
               <TableCell>{d.orgs?.name ?? "—"}</TableCell>
               <TableCell><Badge variant="warn">{d.status}</Badge></TableCell>
               <TableCell className="text-muted-foreground">{relativeTime(d.created_at)}</TableCell>

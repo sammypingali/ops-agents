@@ -16,13 +16,14 @@ export const dynamic = "force-dynamic";
 const STAGES = ["raw", "enriched", "ready_for_outreach", "ready_for_approval", "terminal"] as const;
 type Stage = (typeof STAGES)[number];
 
-export default async function LeadsPage({ searchParams }: { searchParams: { stage?: string } }) {
+export default async function LeadsPage({ searchParams }: { searchParams: { stage?: string; drift?: string } }) {
   const session = (await getSession())!;
   if (!hasAnyRole(session, ["admin", "ops_lead", "ops_operator", "monitor"])) redirect("/work");
 
   const stage: Stage = (STAGES as readonly string[]).includes(searchParams.stage ?? "")
     ? (searchParams.stage as Stage)
     : "raw";
+  const driftOnly = searchParams.drift === "1";
 
   const assigned = await getAssignedOrgIds(session);
   const admin = createAdminClient();
@@ -40,6 +41,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
     q = q.eq("status", "active");
   }
   if (assigned) q = q.in("org_id", assigned);
+  if (driftOnly) q = q.eq("payload->>catalog_drift", "no_longer_listed");
   const { data: rows } = await q;
   const canAct = seesAllOrgs(session) || (assigned !== null && assigned.length > 0);
 
@@ -60,11 +62,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
         Promotable from <code>enriched</code>, or from <code>raw</code> when enrichment was blocked but you want to contact anyway.
       </div>
 
-      <div className="flex gap-2 text-sm">
+      <div className="flex flex-wrap gap-2 text-sm">
         {STAGES.map((s) => (
           <Link
             key={s}
-            href={`/work/leads?stage=${s}`}
+            href={`/work/leads?stage=${s}${driftOnly ? "&drift=1" : ""}`}
             className={
               "rounded-full px-3 py-1 border " +
               (s === stage
@@ -75,6 +77,18 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
             {s}
           </Link>
         ))}
+        <Link
+          href={driftOnly ? `/work/leads?stage=${stage}` : `/work/leads?stage=${stage}&drift=1`}
+          className={
+            "rounded-full px-3 py-1 border ml-auto " +
+            (driftOnly
+              ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40"
+              : "border-border text-muted-foreground hover:text-foreground")
+          }
+          title="Show only leads where Agent 05 flagged the catalog drift (supplier dropped material)."
+        >
+          {driftOnly ? "✓ catalog drift" : "+ catalog drift"}
+        </Link>
       </div>
 
       <Table>
@@ -105,7 +119,17 @@ export default async function LeadsPage({ searchParams }: { searchParams: { stag
                   )}
                 </TableCell>
                 <TableCell>
-                  {r.material_name ?? "—"}
+                  <div className="flex items-center gap-2">
+                    <span>{r.material_name ?? "—"}</span>
+                    {r.payload?.catalog_drift === "no_longer_listed" && (
+                      <span
+                        className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                        title="Agent 05 detected the supplier dropped this material from their catalog."
+                      >
+                        drift
+                      </span>
+                    )}
+                  </div>
                   {r.payload?.inci_name && (
                     <div className="text-xs text-muted-foreground truncate max-w-[28ch]">{r.payload.inci_name}</div>
                   )}
