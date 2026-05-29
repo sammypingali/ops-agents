@@ -16,9 +16,9 @@ import type { MaterialRow } from "./sql";
 // we just instruct it on what to look for and ask for a structured response.
 
 const MODEL = "claude-opus-4-5";
-const MAX_WEB_USES = 32;       // breadth budget — enough searches to cover both marketplace + non-marketplace
-const MAX_OUTPUT_TOKENS = 16384;  // room for 40-50 supplier rows with detail fields
-const MAX_SUPPLIERS = 50;
+const MAX_WEB_USES = 64;       // breadth budget — covers majors pass + marketplace seller drill-in + regional manufacturers + retail/EU shops
+const MAX_OUTPUT_TOKENS = 24000;  // room for 40-60 supplier rows with the full detail schema
+const MAX_SUPPLIERS = 60;
 const URL_PROBE_TIMEOUT_MS = 5_000;
 
 // Field set mirrors Ben's "Vita Organica – Supplier Sourcing" sheet so a scout
@@ -47,13 +47,13 @@ export interface ScoutSupplier {
 
 const SYSTEM_PROMPT = `You are a B2B sourcing analyst building a BROAD supplier landscape for a procurement team. Given an ingredient/material, find as many legitimate bulk suppliers as you can across the whole market, and capture the sourcing details a buyer needs to RFQ where they're available.
 
-BREADTH IS THE PRIMARY GOAL. A good run returns 30-50 suppliers spanning the full landscape — NOT a short list of the biggest names. You MUST cover every bucket below and return each legitimate supplier you find in it:
+BREADTH IS THE PRIMARY GOAL. A good run returns 40-60 suppliers spanning the full landscape — NOT a short list of the biggest names. Do NOT stop at 20: keep issuing searches across regions and channels until the landscape is genuinely exhausted. You MUST cover every bucket below and return each legitimate supplier you find in it:
 1. Originator / branded manufacturers — the trademark owners (e.g. for SCI: BASF Jordapon, Clariant Hostapon, Innospec Pureact/Iselux, Galaxy Galsoft). Never omit these.
 2. Regional bulk manufacturers — India, China, EU, and USA producers.
 3. Distributors & traders — e.g. Univar, Brenntag, Azelis, IMCD, DeWolf, Parchem, Silver Fern.
 4. Marketplace & retail listings WITH published prices — IndiaMART, Alibaba, Made-in-China, TradeIndia sellers; bulk/retail shops like Bulk Apothecary, Natural Bulk Supplies, Wholesale Supplies Plus, MakingCosmetics, Lerochem, Alexmo, Shay & Company. These are where published price ladders live — they are valuable, not noise. Include them.
 
-For marketplace category pages (IndiaMART, Alibaba, Made-in-China, TradeIndia): do NOT collapse them into a single "IndiaMART" row. Drill in and return the individual seller companies behind the listings, each as its own row with its own price/MOQ.
+For marketplace category pages (IndiaMART, Alibaba, Made-in-China, TradeIndia): do NOT collapse them into a single "IndiaMART" row. Drill INTO the platform's result pages and return AT LEAST 6-8 individual seller companies per major marketplace, each as its own row with its own company name, price/MOQ, and contact path. Recording "IndiaMART (Marketplace)" as one row is a bug — it wastes the slot and hides the actual sellers.
 
 DISCOVERY — use the web_search tool aggressively across regions and channels:
 - Generic: "<material> bulk supplier wholesale B2B manufacturer"
@@ -61,8 +61,11 @@ DISCOVERY — use the web_search tool aggressively across regions and channels:
 - China: "<material> manufacturer China bulk supplier exporter" + "<material> Alibaba" + "<material> Made-in-China"
 - Europe/USA: "<material> manufacturer Europe pharmaceutical" + "<material> supplier USA bulk"
 - Originator brands: "<material> originator brand" + "<material> branded grade"
-- Distributor networks: "<material> distributor Univar Brenntag Azelis IMCD DeWolf"
+- KNOWN MAJOR PRODUCERS — always run one query per producer × the material and include any that actually make it: BASF, Solvay, Stepan, Croda, Evonik, KLK OLEO, Galaxy Surfactants, Clariant, Innospec, Nouryon, Zschimmer & Schwarz, Jarchem, Pilot Chemical. Missing a major producer that clearly makes this material is a failed run.
+- Distributor networks: "<material> distributor Univar Brenntag Azelis IMCD DeWolf Silver Fern Shay"
 - Retail/marketplace price ladders: "<material> price per kg" + "<material> buy bulk powder"
+- US specialty distributors: also check Shay & Company, Silver Fern Chemical, Making Cosmetics, Lotioncrafter, Bulk Apothecary for this material.
+- EU specialty cosmetic-ingredient shops: "<material> kaufen" + "<material> acheter" — and check Lerochem, Alexmo Cosmetics, Handymade, Gracefruit.
 - If a trade name / brand is provided, also: "<trade> authorized distributor" and "<trade> Knowde"
 
 DETAIL IS SECONDARY TO BREADTH. Capture pricing, contact, MOQ, grades, and certifications where they're readily visible, but NEVER drop a legitimate supplier just because its detail is thin. Fill what you find, leave the rest null. Do not fabricate. Do not spend so long extracting detail on one supplier that you fail to cover the rest of the market.
@@ -79,6 +82,7 @@ CONFIDENCE:
 - medium  — reputable distributor/marketplace; authorization unverified.
 - lead    — needs human follow-up (unknown reseller, thin signal).
 For trademark-bearing ingredients, only the brand owner / their named distributors are "strong". Unauthorized resellers are "lead".
+Primary manufacturers of a branded product line are ALWAYS strong — e.g. Galaxy Surfactants (Galsoft), Clariant (Hostapon), BASF (Jordapon), Innospec (Pureact/Iselux), and the makers of Chemoryl and Elfan. Never rate a clear primary/branded manufacturer below strong.
 
 FIELD RULES:
 - supplier_name: the company's name only. Put any branded product line in trade_name, NOT in supplier_name (e.g. supplier_name "Clariant", trade_name "Hostapon SCI-85 P").
@@ -118,7 +122,7 @@ Return ONLY a JSON code block (no prose around it) with this exact shape:
 \`\`\`
 
 Rules:
-- Return up to 50 suppliers per material, spread across the four buckets above. Aim for 30+ when the market supports it; do not stop at 15-20 if more legitimate candidates exist.
+- Return up to 60 suppliers per material, spread across the four buckets above. Aim for 40+ when the market supports it; do NOT stop at 15-20 — keep searching until you've genuinely exhausted the major producers, regional manufacturers, distributors, and individual marketplace sellers.
 - A run that returns only manufacturers (or only marketplace listings) is incomplete — balance non-marketplace (manufacturers/distributors) AND marketplace/retail leads.
 - Skip suppliers without a usable public URL.
 - Do NOT include retail consumer brands (Amazon listings, eBay, Walmart, Etsy).
@@ -198,7 +202,11 @@ export async function scoutSuppliersForMaterial(material: MaterialRow, opts?: {
 
   let raw: string;
   try {
-    const res = await anthropic().messages.create({
+    // Stream the response: a breadth run issues up to MAX_WEB_USES server-side
+    // web searches and emits ~16k tokens, which routinely runs past the 6-minute
+    // gateway timeout on a non-streaming request (observed: consistent 524s).
+    // Streaming keeps the connection alive for the full long-running operation.
+    const stream = anthropic().messages.stream({
       model: MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: SYSTEM_PROMPT,
@@ -209,6 +217,7 @@ export async function scoutSuppliersForMaterial(material: MaterialRow, opts?: {
       } as any],
       messages: [{ role: "user", content: buildUserMessage(material) }],
     });
+    const res = await stream.finalMessage();
     raw = res.content
       .map((b: any) => (b.type === "text" ? b.text : ""))
       .join("");
@@ -292,12 +301,14 @@ export async function scoutSuppliersForMaterial(material: MaterialRow, opts?: {
 }
 
 export function scoreScoutConfidence(hint: ScoutSupplier["confidence_hint"]): number {
-  // Web-discovered leads should sit below graph-derived leads, even when
-  // the model marks them "strong" — operators verify before promoting.
+  // Ben's High/Med/Low calibration. A primary manufacturer of a branded line
+  // (Galsoft, Hostapon, Jordapon, Pureact, Chemoryl, Elfan) should score clearly
+  // above a small unverified trader, so we spread these out rather than bunching
+  // every web lead near 0.5.
   switch (hint) {
-    case "strong": return 0.65;
-    case "medium": return 0.55;
-    case "lead":   return 0.45;
+    case "strong": return 0.80; // High — primary/branded manufacturer or named authorized distributor
+    case "medium": return 0.60; // Med — reputable distributor/marketplace, authorization unverified
+    case "lead":   return 0.35; // Low — unverified reseller / thin signal, needs human follow-up
   }
 }
 
