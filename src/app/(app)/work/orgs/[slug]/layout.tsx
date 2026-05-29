@@ -6,11 +6,14 @@ export const dynamic = "force-dynamic";
 
 const sections = [
   { href: "", label: "Overview" },
-  { href: "/revalidation", label: "Revalidation" },
+  { href: "/revalidation", label: "Expiries" },
+  { href: "/leads", label: "Leads" },
+  { href: "/price-changes", label: "Price Changes" },
   { href: "/outreach", label: "Outreach" },
+  { href: "/inbound", label: "Inbound" },
   { href: "/cases", label: "Cases" },
-  { href: "/suppliers", label: "Suppliers" },
   { href: "/approvals", label: "Approvals" },
+  { href: "/suppliers", label: "Suppliers" },
   { href: "/quotes", label: "Quotes" },
 ];
 

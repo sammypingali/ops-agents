@@ -1,9 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { notFound } from "next/navigation";
 import { getSession, hasAnyRole, type AppRole } from "@/lib/auth";
 import { operatorRoles, primaryRole } from "@/lib/operator";
 import { OrgOperatorsEditor } from "@/components/org-operators-editor";
+import { getOrgNudgeCounts } from "@/lib/org-nudges";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,9 @@ export default async function OrgOverview({ params }: { params: { slug: string }
   const drafts = draftsRes.data ?? [];
   const staged = drafts.filter((d: any) => d.status === "staged").length;
   const reviewed = drafts.filter((d: any) => d.status === "reviewed").length;
+  const nudges = await getOrgNudgeCounts(admin, org.id);
   const ops = opsRes.data as any;
+  const base = `/work/orgs/${org.slug}`;
 
   // Filter candidates: only people who can act as primary/backup operators for an org.
   const eligibleRoles: AppRole[] = ["admin", "ops_lead", "ops_operator"];
@@ -82,10 +86,12 @@ export default async function OrgOverview({ params }: { params: { slug: string }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Metric label="Drafts in flight" value={staged} note={`${reviewed} reviewed, awaiting send`} />
-        <Metric label="Open cases" value={casesRes.data?.length ?? 0} />
-        <Metric label="Pending approvals" value={approvalsRes.data?.length ?? 0} />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <Metric label="New leads" value={nudges.newLeads} note="to review" href={`${base}/leads`} />
+        <Metric label="Drafts to send" value={staged} note={`${reviewed} reviewed`} href={`${base}/outreach`} />
+        <Metric label="Price changes" value={nudges.priceChanges} note="pending review" href={`${base}/price-changes`} />
+        <Metric label="Open cases" value={casesRes.data?.length ?? 0} href={`${base}/cases`} />
+        <Metric label="Pending approvals" value={approvalsRes.data?.length ?? 0} href={`${base}/approvals`} />
       </div>
 
       <Card className="tb-surface shadow-none">
@@ -107,9 +113,9 @@ export default async function OrgOverview({ params }: { params: { slug: string }
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: number; note?: string }) {
-  return (
-    <Card className="tb-surface shadow-none">
+function Metric({ label, value, note, href }: { label: string; value: number; note?: string; href?: string }) {
+  const card = (
+    <Card className={`tb-surface shadow-none ${href ? "transition-colors hover:bg-secondary/40" : ""}`}>
       <CardHeader>
         <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{label}</CardTitle>
       </CardHeader>
@@ -119,4 +125,5 @@ function Metric({ label, value, note }: { label: string; value: number; note?: s
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href} className="block">{card}</Link> : card;
 }
