@@ -2,6 +2,10 @@ import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { queryRecentMaterials, findCandidatesForMaterial, type CandidateSupplier, type MaterialRow } from "./sql";
 import { scoutSuppliersForMaterial, scoreScoutConfidence, scoutCompleteness, type ScoutSupplier } from "./scout";
+import { enrichAndStageLead } from "../data-enrichment/run-enrich";
+import { executeAgentRun } from "../../runtime";
+import { toCsv } from "@/lib/csv";
+import { uploadCsvAndSign } from "@/lib/storage";
 
 // v1 trims (vs. full spec):
 //   - existing-DB only mode. BrowserBase external discovery is gated on
@@ -63,6 +67,43 @@ registerAgent({
     "Cron-driven scout. For each newly-added Tenkara material, surfaces candidate suppliers from the existing supplier graph (quote history + uploaded catalogs) into leads_in_flight @ stage='raw' for human enrichment review.",
   async run(ctx) {
     const admin = createAdminClient();
+
+    // Single-driver model: Agents 06 (Enrichment) and 04 (Outreach) are no longer
+    // independently scheduled — Agent 03 drives them. Drain the existing backlog
+    // FIRST (enrich raw leads, then let 04 draft the enriched ones), then scout
+    // new materials. Everything is bounded by a wall-clock budget so we stay
+    // under the 300s function limit; anything not reached rolls to the next run.
+    const DRIVE_BUDGET_MS = 250_000;
+    const driveStart = Date.now();
+    const elapsedMs = () => Date.now() - driveStart;
+
+    {
+      const { data: rawLeads } = await admin
+        .from("leads_in_flight")
+        .select("id, supplier_id, supplier_name, material_name, payload")
+        .eq("stage", "raw")
+        .eq("status", "active")
+        .order("confidence_score", { ascending: false, nullsFirst: false })
+        .limit(25);
+      let drainedEnriched = 0;
+      for (const row of (rawLeads ?? []) as any[]) {
+        if (elapsedMs() > 90_000) break; // reserve budget for scouting
+        const o = await enrichAndStageLead(
+          { id: row.id, supplier_id: row.supplier_id, supplier_name: row.supplier_name, material_name: row.material_name, payload: row.payload ?? {} },
+          { admin, runId: ctx.runId, log: (m, meta) => ctx.log(m, { step: "drain-enrich", ...(meta ?? {}) }) }
+        );
+        if (o.status === "promoted") drainedEnriched++;
+      }
+      await ctx.log(`Drain: enriched ${drainedEnriched} raw lead(s) before scouting`, { step: "drain" });
+      // Agent 04 is template-based and fast — let it draft the enriched backlog.
+      if (elapsedMs() < 180_000) {
+        try {
+          await executeAgentRun({ agentSlug: "agent-04-outreach", triggerSource: "cron" });
+        } catch (e: any) {
+          await ctx.log(`Drain outreach (agent-04) failed: ${e?.message ?? e}`, { level: "warn", step: "drain" });
+        }
+      }
+    }
 
     // 1. Determine lookback window: prefer last successful run; fallback to 4h.
     const { data: lastRun } = await admin
@@ -168,6 +209,10 @@ registerAgent({
     for (const material of materials) {
       if (leadsCreated >= MAX_NEW_LEADS_PER_RUN) {
         await ctx.log(`Hit MAX_NEW_LEADS_PER_RUN=${MAX_NEW_LEADS_PER_RUN}; stopping`, { step: "cap" });
+        break;
+      }
+      if (elapsedMs() > DRIVE_BUDGET_MS) {
+        await ctx.log(`Drive budget reached; deferring remaining materials to next run`, { step: "budget" });
         break;
       }
 
@@ -375,6 +420,33 @@ registerAgent({
       }
     }
 
+    // Sourcing CSV of this run's new leads — for manual supplier-index upload.
+    let csvUrl: string | null = null;
+    try {
+      const { data: runLeads } = await admin
+        .from("leads_in_flight")
+        .select("supplier_name, material_name, payload, source, confidence_score, stage")
+        .eq("agent_run_id", ctx.runId);
+      if (runLeads && runLeads.length) {
+        const headers = ["supplier", "material", "inci", "role", "site_type", "country", "website", "email", "phone", "pricing", "moq", "grades", "certifications", "confidence", "source", "stage"];
+        const rows = runLeads.map((r: any) => {
+          const p = r.payload ?? {};
+          return [
+            r.supplier_name ?? "", r.material_name ?? "", p.inci_name ?? "", p.supplier_role ?? "", p.site_type ?? "", p.supplier_country ?? "",
+            p.supplier_website ?? p.source_url ?? "", p.supplier_contact_email ?? "", p.supplier_phone ?? "", p.pack_sizes_pricing ?? "", p.moq ?? "",
+            p.grades_offered ?? "", p.certifications ?? "", r.confidence_score ?? "", r.source ?? "", r.stage ?? "",
+          ];
+        });
+        const filename = `${new Date().toISOString().slice(0, 10)}_new_leads_${runLeads.length}.csv`;
+        const signed = await uploadCsvAndSign({ filename, content: toCsv(headers, rows), expiresInDays: 7 });
+        csvUrl = signed.signedUrl;
+        ctx.setMetadata({ csvSignedUrl: signed.signedUrl, csvFilename: filename, csvExpiresAt: signed.expiresAt });
+        await ctx.log(`Sourcing CSV uploaded (${runLeads.length} leads) → ${signed.signedUrl}`, { step: "csv" });
+      }
+    } catch (e: any) {
+      await ctx.log(`CSV build/upload failed (non-fatal): ${e?.message ?? e}`, { level: "warn", step: "csv" });
+    }
+
     ctx.setItemsProcessed(leadsCreated);
     ctx.setStatus("success");
     const graphLeads = leadsCreated - scoutLeadsCreated;
@@ -382,6 +454,7 @@ registerAgent({
       `Staged ${leadsCreated} raw leads (${graphLeads} graph, ${scoutLeadsCreated} scout) across ${materialsWithLeads} material${materialsWithLeads === 1 ? "" : "s"} · ` +
         `${materialsWithScoutLeads} got scout leads · ${materialsWithoutLeads} empty · ${skippedByMirror} graph candidates skipped by 90d mirror` +
         (scoutEnabled ? "" : " · scout off (no ANTHROPIC_API_KEY)") +
+        (csvUrl ? ` · CSV ready` : "") +
         (noLeadMaterials.length
           ? ` · empty: ${noLeadMaterials.slice(0, 3).join(", ")}${noLeadMaterials.length > 3 ? "…" : ""}`
           : "")

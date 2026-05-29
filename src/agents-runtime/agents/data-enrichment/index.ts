@@ -1,6 +1,7 @@
 import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enrichLead, type RawLead, type EnrichmentResult } from "./enrich";
+import type { RawLead } from "./enrich";
+import { enrichAndStageLead } from "./run-enrich";
 
 // v1 trim (vs. full spec):
 //   - pre-outreach only. Reply-driven enrichment lands when Agent 08
@@ -66,81 +67,19 @@ registerAgent({
         material_name: row.material_name,
         payload: row.payload ?? {},
       };
-
-      let result: EnrichmentResult;
-      try {
-        result = await enrichLead(lead);
-      } catch (e: any) {
-        errored++;
-        await ctx.log(`Enrichment threw for lead ${lead.id}: ${e.message}`, {
-          level: "warn",
-          step: "enrich",
-          data: { lead_id: lead.id },
-        });
-        return;
-      }
-
-      // Merge enrichment into payload, preserving original fields. Discovered
-      // contact channels overwrite the (often empty) scout values.
-      const mergedPayload = {
-        ...(lead.payload ?? {}),
-        enrichment: {
-          website_probe: result.website_probe,
-          email_check: result.email_check,
-          contact: result.contact,
-          tenkara_supplier: result.tenkara_supplier,
-          completeness_score: result.completeness_score,
-          enriched_at: new Date().toISOString(),
-          enrichment_run_id: ctx.runId,
-        },
-        // Flatten the fields we want to query/filter on without digging into JSON.
-        supplier_contact_email: result.contact.email ?? lead.payload?.supplier_contact_email ?? null,
-        supplier_phone: result.contact.phone ?? result.tenkara_supplier?.poc_phone ?? lead.payload?.supplier_phone ?? null,
-        contact_url: result.contact.contact_url ?? lead.payload?.contact_url ?? null,
-        supplier_country: lead.payload?.supplier_country ?? result.tenkara_supplier?.country ?? null,
-        completeness_score: result.completeness_score,
-      };
-
-      if (result.outreach_ready) {
-        const { error: upErr } = await admin
-          .from("leads_in_flight")
-          .update({ stage: "enriched", payload: mergedPayload })
-          .eq("id", lead.id);
-        if (upErr) {
-          errored++;
-          await ctx.log(`Promote update failed for lead ${lead.id}: ${upErr.message}`, {
-            level: "error",
-            step: "promote",
-            data: { lead_id: lead.id },
-          });
-          return;
-        }
+      const outcome = await enrichAndStageLead(lead, { admin, runId: ctx.runId, log: (m, meta) => ctx.log(m, meta) });
+      if (outcome.status === "promoted") {
         promoted++;
-        await ctx.log(
-          `Promoted ${lead.supplier_name} → ${lead.material_name} (score ${result.completeness_score}, contact via ${result.contact.source ?? "none"}, ${result.contact.pages_tried}p)`,
-          { step: "promote", data: { lead_id: lead.id, completeness_score: result.completeness_score, contact: result.contact } }
-        );
-      } else {
-        const reason = result.blocked_reason ?? "unknown";
-        blocked++;
-        blockedReasons[reason] = (blockedReasons[reason] ?? 0) + 1;
-        const { error: upErr } = await admin
-          .from("leads_in_flight")
-          .update({ payload: { ...mergedPayload, enrichment_blocked_reason: reason } })
-          .eq("id", lead.id);
-        if (upErr) {
-          errored++;
-          await ctx.log(`Block update failed for lead ${lead.id}: ${upErr.message}`, {
-            level: "error",
-            step: "block",
-            data: { lead_id: lead.id },
-          });
-          return;
-        }
-        await ctx.log(`Left at raw: ${lead.supplier_name} → ${lead.material_name} (${reason}, tried ${result.contact.pages_tried}p)`, {
-          step: "block",
-          data: { lead_id: lead.id, reason },
+        await ctx.log(`Promoted ${lead.supplier_name} → ${lead.material_name} (score ${outcome.completeness})`, {
+          step: "promote",
+          data: { lead_id: lead.id, completeness_score: outcome.completeness },
         });
+      } else if (outcome.status === "blocked") {
+        blocked++;
+        const reason = outcome.reason ?? "unknown";
+        blockedReasons[reason] = (blockedReasons[reason] ?? 0) + 1;
+      } else {
+        errored++;
       }
     }
 
