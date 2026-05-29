@@ -6,7 +6,7 @@ import { relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { OperatorChip } from "@/components/operator-chip";
 import { operatorRoles, primaryRole } from "@/lib/operator";
-import { resolveSupplierNames, resolveMaterialNames, resolveQuoteRefs } from "@/lib/tenkara-names";
+import { resolveSupplierNamesWithFallback, resolveMaterialNames, resolveQuoteRefs } from "@/lib/tenkara-names";
 import { DraftSignals } from "@/components/draft-signals";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function RevalidationPage({ params }: { params: { slug: str
   let quoteRefs = new Map<string, string>();
   try {
     [supplierNames, materialNames, quoteRefs] = await Promise.all([
-      resolveSupplierNames(rows.map((d: any) => d.supplier_id).filter(Boolean)),
+      resolveSupplierNamesWithFallback(rows.map((d: any) => d.supplier_id).filter(Boolean)),
       resolveMaterialNames(rows.map((d: any) => d.material_id).filter(Boolean)),
       resolveQuoteRefs(rows.map((d: any) => d.quote_id).filter(Boolean)),
     ]);

@@ -1,4 +1,5 @@
 import { tenkaraQuery } from "./tenkara-readonly";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // Resolve supplier and material UUIDs to display names by hitting Tenkara prod.
 // Used by /work pages where rows reference IDs but humans need names. We cache
@@ -27,6 +28,30 @@ export async function resolveMaterialNames(ids: string[]): Promise<Map<string, s
   );
   for (const r of rows) out.set(r.id, r.name);
   return out;
+}
+
+// Resolve supplier names, falling back to the name we stored on the lead when
+// Tenkara doesn't have the supplier_id (e.g. scout discoveries, or suppliers
+// deleted/RLS-hidden in Tenkara). draft_references only stores supplier_id, so
+// without this fallback those rows render as raw UUIDs in the UI.
+export async function resolveSupplierNamesWithFallback(ids: string[]): Promise<Map<string, string>> {
+  const names = await resolveSupplierNames(ids).catch(() => new Map<string, string>());
+  const missing = Array.from(new Set(ids.filter((x) => x && !names.has(x))));
+  if (missing.length === 0) return names;
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("leads_in_flight")
+      .select("supplier_id, supplier_name")
+      .in("supplier_id", missing)
+      .not("supplier_name", "is", null);
+    for (const r of (data ?? []) as { supplier_id: string | null; supplier_name: string | null }[]) {
+      if (r.supplier_id && r.supplier_name && !names.has(r.supplier_id)) names.set(r.supplier_id, r.supplier_name);
+    }
+  } catch {
+    /* OA fallback is best-effort */
+  }
+  return names;
 }
 
 // Tenkara's material_quotes table has no quote-number field. Build a human

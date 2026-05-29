@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
 import { OperatorChip } from "@/components/operator-chip";
 import { operatorRoles, primaryRole } from "@/lib/operator";
-import { resolveSupplierNames, resolveMaterialNames } from "@/lib/tenkara-names";
+import { resolveSupplierNamesWithFallback, resolveMaterialNames } from "@/lib/tenkara-names";
 import { DraftSignals } from "@/components/draft-signals";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function OutreachPage({ params }: { params: { slug: string 
   let materialNames = new Map<string, string>();
   try {
     [supplierNames, materialNames] = await Promise.all([
-      resolveSupplierNames(rows.map((d: any) => d.supplier_id).filter(Boolean)),
+      resolveSupplierNamesWithFallback(rows.map((d: any) => d.supplier_id).filter(Boolean)),
       resolveMaterialNames(rows.map((d: any) => d.material_id).filter(Boolean)),
     ]);
   } catch {

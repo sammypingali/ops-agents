@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { relativeTime } from "@/lib/utils";
-import { resolveSupplierNames, resolveMaterialNames } from "@/lib/tenkara-names";
+import { resolveSupplierNamesWithFallback, resolveMaterialNames } from "@/lib/tenkara-names";
 import { PageExplainer } from "@/components/page-explainer";
 import { roleLabel } from "@/lib/roles";
 import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
@@ -50,7 +50,7 @@ export default async function TodayInboxPage() {
   let materialNames = new Map<string, string>();
   try {
     [supplierNames, materialNames] = await Promise.all([
-      resolveSupplierNames(supplierIds),
+      resolveSupplierNamesWithFallback(supplierIds),
       resolveMaterialNames(materialIds),
     ]);
   } catch {
