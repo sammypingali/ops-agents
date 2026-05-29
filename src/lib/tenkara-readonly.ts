@@ -9,7 +9,15 @@ import { Pool, type PoolClient } from "pg";
 // - statement_timeout=20s on the server side as a belt-and-suspenders.
 
 const REQUIRED_USERNAME_PREFIX = "mcp_readonly.";
-const QUERY_TIMEOUT_MS = 25_000;
+// Per-attempt query timeout. Lower than before so we can retry a couple of
+// times within an agent's budget rather than burning 25s on one hung attempt.
+const QUERY_TIMEOUT_MS = 12_000;
+// The Tenkara pooler intermittently hangs on connect or query. Each failure
+// force-destroys the pool (below), so a retry rebuilds a fresh connection —
+// which clears the great majority of these transient timeouts.
+const MAX_ATTEMPTS = 3;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let pool: Pool | null = null;
 
@@ -64,14 +72,20 @@ async function destroyPool() {
 }
 
 export async function tenkaraQuery<T extends Record<string, any> = Record<string, any>>(text: string, params: any[] = []): Promise<T[]> {
-  if (!pool) pool = buildPool();
-  try {
-    const { rows } = await withTimeout(pool.query<T>(text, params), QUERY_TIMEOUT_MS, "tenkara query");
-    return rows;
-  } catch (e) {
-    await destroyPool();
-    throw e;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (!pool) pool = buildPool();
+    try {
+      const { rows } = await withTimeout(pool.query<T>(text, params), QUERY_TIMEOUT_MS, "tenkara query");
+      return rows;
+    } catch (e) {
+      lastErr = e;
+      // Drop the (possibly poisoned/slow) pool so the next attempt reconnects fresh.
+      await destroyPool();
+      if (attempt < MAX_ATTEMPTS) await sleep(400 * attempt);
+    }
   }
+  throw lastErr;
 }
 
 export async function withTenkaraClient<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
