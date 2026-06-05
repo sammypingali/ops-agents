@@ -61,6 +61,7 @@ Only **10 Outreach QA** is truly *not* scheduled — it runs **inline** inside t
 | every 30 min (:20, :50) | 04 outreach |
 | every 30 min | 08 inbound email scan + reply draft |
 | 14:00 | 07 escalation + nudge |
+| every hour (:00) | 12 client profile (backstop; normally inline) |
 | 18:00 | fleet summary |
 | — (inline) | 10 QA (runs inside draft staging) |
 | — (paused) | 09 doc refresh, 11 CSV push |
@@ -104,6 +105,9 @@ Not built. A future draft-producer (refresh out-of-date specs/COAs).
 
 ### Agent 11 — Lead Scanner CSV Push · paused (`training_wheels=true`)
 `lead-scanner-csv-push/index.ts`. Per-supplier CSV of dropped/terminal leads to Andrew (Tenkara eng). Currently paused.
+
+### Agent 12 — Client Profile · event-driven (inline) + hourly backstop
+`client-profile/index.ts` + `src/lib/client-profile.ts`. Maintains a `client_profiles` row per org: copies the current `client_settings` in, derives `client_type` (active/ghost/skip/prospect — generalizing the active/ghost lists in `quote-revalidation/config.ts`), and snapshots OA activity (lead + draft counts). **Primary trigger is event-driven:** the Client Profile tab's Save/Finalize server actions (`src/app/actions/client-settings.ts`) call `rebuildClientProfile(orgId)` inline, so the profile updates the moment ops change a client's settings. The **hourly scheduled run is a backstop** — `rebuildStaleClientProfiles` re-syncs any org whose `client_profiles.settings_synced_at` ≠ `client_settings.updated_at` (e.g. an inline build failed). OA read/write only — never touches Tenkara or Missive. The profile is the "rendition" shown at the top of each org's Client Profile tab; the editable settings form sits below it.
 
 ---
 

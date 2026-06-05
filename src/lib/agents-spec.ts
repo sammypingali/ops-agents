@@ -123,4 +123,14 @@ export const AGENT_SPECS: AgentSpec[] = [
     automatic: "Reads dropped/terminal leads, groups by supplier, uploads CSV to Supabase Storage, posts a Slack DM. 7-day dedup per supplier.",
     humanInput: "Andrew confirms uploads in Slack — the confirmation gets logged in lead_scanner_exports.",
   },
+  {
+    number: 12,
+    slug: "agent-12-client-profile",
+    name: "Client Profile",
+    status: "shipped",
+    cadence: "Event-driven (inline on settings change) + hourly backstop · America/New_York",
+    purpose: "Maintain a per-client profile (client_type + activity snapshot) that updates whenever ops change a client's settings, so clients are identifiable at a glance on their org tab.",
+    automatic: "On any save/finalize of a client's settings, rebuilds client_profiles inline: copies the settings in, derives client_type (active/ghost/skip/prospect), and snapshots OA activity (leads, drafts). The hourly run is a backstop that re-syncs any profile that drifted from its settings. OA-only — never reads Tenkara or stages drafts.",
+    humanInput: "Fill in the client settings on each org's Client Profile tab and Save (or Finalize). The profile updates immediately.",
+  },
 ];

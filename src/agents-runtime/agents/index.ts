@@ -12,4 +12,5 @@ import "./marketplace-validation";
 import "./escalation";
 import "./outreach-qa";
 import "./email-scanner";
+import "./client-profile";
 import "./fleet-summary";
