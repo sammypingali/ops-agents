@@ -123,8 +123,8 @@ You are given internal data we hold on the client plus any notes ops uploaded. U
 
 Return ONLY a JSON object (no prose):
 {
-  "summary": "<markdown, 100-180 words: who they are, what they make/buy, how they use Tenkara, anything notable for an operator representing them>",
-  "highlights": ["<=6 short factual bullets"],
+  "summary": "<markdown, 80-150 words. A COMPANY DESCRIPTION ONLY: who the company is, how long they've been in business, what they make/sell, who their customers are and whether they distribute to large or multi-national companies, and their market position. Do NOT list the specific raw materials they source through Tenkara, their quote/supplier counts, or their material needs here — that belongs in the rep_sheet. Do NOT mention employee headcount.>",
+  "highlights": ["<=5 short factual bullets about the COMPANY (products, customers/distribution, location, history). Do NOT include employee count or a list of sourced materials.>"],
   "rep_sheet": {
     "years_in_business": "<how long in business / founded year, or null>",
     "products": "<what the company makes/sells, or null>",
@@ -139,6 +139,9 @@ Return ONLY a JSON object (no prose):
 }
 
 Rules:
+- Keep the company description (summary/highlights) SEPARATE from their material/quote needs. Description = who the company is. The materials they source, volumes, and end use go ONLY in the rep_sheet.
+- Never include employee headcount anywhere — it is not something we share with suppliers.
+- If research shows who they sell to or distribute to (especially large or multi-national companies), include that in the summary — it strengthens how an operator represents them.
 - Ground claims in the internal data and pages you actually visited via web_search. Do NOT fabricate URLs, figures, addresses, or dates.
 - For any rep_sheet field you can't determine from research or internal data, use null — do NOT guess. Operators will fill those in. order_timing, intended_use and can_meet_in_person often aren't public; leave null/'unknown' unless the data says otherwise.
 - Prefer the internal volume/material figures for "volume" and "end_use".
