@@ -1,10 +1,24 @@
 "use server";
 import { getSession, hasAnyRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { rebuildClientProfile } from "@/lib/client-profile";
+import { generateClientProfile } from "@/lib/client-profile";
 import { revalidatePath } from "next/cache";
 
 interface Result { ok: boolean; error?: string }
+
+const EDIT_ROLES = ["admin", "ops_lead", "ops_operator"] as const;
+
+function clean(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t === "" ? null : t;
+}
+
+async function requireEditor() {
+  const session = await getSession();
+  if (!session) return { error: "unauthenticated" as const };
+  if (!hasAnyRole(session, [...EDIT_ROLES])) return { error: "forbidden" as const };
+  return { session };
+}
 
 export interface ClientSettingsInput {
   outreach_mode: "active" | "ghost" | "skip";
@@ -15,24 +29,12 @@ export interface ClientSettingsInput {
   sourcing_notes: string | null;
 }
 
-const EDIT_ROLES = ["admin", "ops_lead", "ops_operator"] as const;
-
-function clean(v: string | null | undefined): string | null {
-  const t = (v ?? "").trim();
-  return t === "" ? null : t;
-}
-
-// Save edits without finalizing. Editing a finalized client drops it back to
-// draft so the profile won't rebuild until ops re-finalize the new values.
+// Save the optional ops-entered inputs. These feed the next generation; they
+// are not the profile itself.
 export async function saveClientSettings(orgId: string, input: ClientSettingsInput): Promise<Result> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "unauthenticated" };
-  if (!hasAnyRole(session, [...EDIT_ROLES])) return { ok: false, error: "forbidden" };
-  if (input.outreach_mode === "ghost" && !clean(input.ghost_brand)) {
-    return { ok: false, error: "ghost brand is required for ghost clients" };
-  }
+  const auth = await requireEditor();
+  if (auth.error) return { ok: false, error: auth.error };
   const admin = createAdminClient();
-
   const { error } = await admin.from("client_settings").upsert(
     {
       org_id: orgId,
@@ -43,52 +45,96 @@ export async function saveClientSettings(orgId: string, input: ClientSettingsInp
       primary_contact_email: clean(input.primary_contact_email),
       sourcing_notes: clean(input.sourcing_notes),
       status: "draft",
-      finalized_at: null,
-      finalized_by: null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "org_id" }
   );
   if (error) return { ok: false, error: error.message };
-
-  // Event-driven: rebuild the profile immediately so the tab reflects the edit.
-  await rebuildClientProfile(admin, orgId);
-
   revalidatePath(`/work/orgs`);
   return { ok: true };
 }
 
-// Finalize: persist the values and stamp finalized_at, then rebuild the
-// profile inline so the Client Profile tab updates immediately.
-export async function finalizeClientSettings(orgId: string, input: ClientSettingsInput): Promise<Result> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "unauthenticated" };
-  if (!hasAnyRole(session, [...EDIT_ROLES])) return { ok: false, error: "forbidden" };
-  if (input.outreach_mode === "ghost" && !clean(input.ghost_brand)) {
-    return { ok: false, error: "ghost brand is required for ghost clients" };
-  }
+// Run the research generation for one client. force=true overrides a prior
+// manual edit (the explicit "Regenerate" path).
+export async function generateClientProfileAction(orgId: string, force = false): Promise<Result> {
+  const auth = await requireEditor();
+  if (auth.error) return { ok: false, error: auth.error };
   const admin = createAdminClient();
+  const res = await generateClientProfile(admin, orgId, { force });
+  if (res.status === "error") return { ok: false, error: res.error };
+  if (res.status === "no_org") return { ok: false, error: "org not found" };
+  revalidatePath(`/work/orgs`);
+  return { ok: true };
+}
 
-  const { error } = await admin.from("client_settings").upsert(
-    {
-      org_id: orgId,
-      outreach_mode: input.outreach_mode,
-      ghost_brand: clean(input.ghost_brand),
-      priority_tier: input.priority_tier,
-      primary_contact_name: clean(input.primary_contact_name),
-      primary_contact_email: clean(input.primary_contact_email),
-      sourcing_notes: clean(input.sourcing_notes),
-      status: "finalized",
-      finalized_at: new Date().toISOString(),
-      finalized_by: session.userId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "org_id" }
-  );
+// Ops correction. Marks the profile manual_override so auto-refresh won't clobber it.
+export async function editClientProfile(
+  orgId: string,
+  patch: { summary?: string; client_type?: "active" | "ghost" | "skip" | "prospect" }
+): Promise<Result> {
+  const auth = await requireEditor();
+  if (auth.error) return { ok: false, error: auth.error };
+  const admin = createAdminClient();
+  const update: Record<string, any> = { manual_override: true, updated_at: new Date().toISOString() };
+  if (patch.summary !== undefined) update.summary = patch.summary;
+  if (patch.client_type !== undefined) update.client_type = patch.client_type;
+  const { error } = await admin.from("client_profiles").update(update).eq("org_id", orgId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/work/orgs`);
+  return { ok: true };
+}
+
+// Add a pasted note. Stored, then folded into the profile on the next generate.
+export async function addClientNote(orgId: string, text: string, autoGenerate = true): Promise<Result> {
+  const auth = await requireEditor();
+  if (auth.error) return { ok: false, error: auth.error };
+  const body = clean(text);
+  if (!body) return { ok: false, error: "empty note" };
+  const admin = createAdminClient();
+  const { error } = await admin.from("client_uploads").insert({
+    org_id: orgId,
+    kind: "note",
+    content_text: body,
+    created_by: auth.session!.userId,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (autoGenerate) await generateClientProfile(admin, orgId, { force: false });
+  revalidatePath(`/work/orgs`);
+  return { ok: true };
+}
+
+// Upload a file. Text/markdown content is extracted inline; other types are
+// stored and referenced (text extraction for those is a fast-follow).
+const UPLOAD_BUCKET = "client-uploads";
+export async function uploadClientFile(orgId: string, form: FormData): Promise<Result> {
+  const auth = await requireEditor();
+  if (auth.error) return { ok: false, error: auth.error };
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "no file" };
+  if (file.size > 5 * 1024 * 1024) return { ok: false, error: "file too large (max 5MB)" };
+
+  const admin = createAdminClient();
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const isText = /^text\/|markdown|json|csv/.test(file.type) || /\.(txt|md|markdown|csv|json)$/i.test(file.name);
+  const path = `${orgId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+
+  const up = await admin.storage.from(UPLOAD_BUCKET).upload(path, bytes, {
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
+  if (up.error) return { ok: false, error: `upload failed: ${up.error.message}` };
+
+  const { error } = await admin.from("client_uploads").insert({
+    org_id: orgId,
+    kind: "file",
+    file_path: path,
+    file_name: file.name,
+    content_text: isText ? bytes.toString("utf8").slice(0, 20000) : null,
+    created_by: auth.session!.userId,
+  });
   if (error) return { ok: false, error: error.message };
 
-  await rebuildClientProfile(admin, orgId);
-
+  await generateClientProfile(admin, orgId, { force: false });
   revalidatePath(`/work/orgs`);
   return { ok: true };
 }

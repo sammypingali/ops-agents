@@ -1,41 +1,40 @@
 import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { rebuildStaleClientProfiles } from "@/lib/client-profile";
+import { refreshStaleClientProfiles } from "@/lib/client-profile";
 
 // Agent 12 - Client Profile.
 //
-// Profiles are primarily rebuilt INLINE when ops change a client's settings
-// (see src/app/actions/client-settings.ts), so the org's Client Profile tab
-// updates immediately. This scheduled run is the backstop: it re-syncs any org
-// whose profile drifted out of sync with its settings.updated_at (e.g. an
-// inline build failed, or settings predate the agent).
+// Profiles are generated on demand (the "Generate / Refresh" button on each
+// org's Client Profile tab) and whenever ops upload info. This scheduled run
+// is a LIGHT backstop: it re-researches a few stale or missing profiles per
+// run (web_search is costly, so it's capped). It respects ops edits
+// (manual_override) — only an explicit regen overrides those.
 //
-// OA-only: reads client_settings + OA activity counts, writes client_profiles.
-// Never reads Tenkara or stages drafts.
+// OA writes only; Tenkara is read-only and best-effort.
 
 registerAgent({
   slug: "agent-12-client-profile",
   displayName: "Agent 12 - Client Profile",
   description:
-    "Backstop sweep for client profiles. Re-syncs any org whose client_profiles row drifted out of sync with its client_settings. Profiles normally rebuild inline when ops edit settings. OA-only.",
+    "Researches and maintains client profiles. Backstop sweep: re-researches a few stale/missing profiles per run (web_search + Tenkara + settings + uploads, summarized). On-demand generation drives the rest. OA-only.",
   async run(ctx) {
     const admin = createAdminClient();
     let res;
     try {
-      res = await rebuildStaleClientProfiles(admin, { runId: ctx.runId });
+      res = await refreshStaleClientProfiles(admin, { runId: ctx.runId, limit: 3 });
     } catch (e: any) {
-      await ctx.log(`Sweep failed: ${e.message}`, { level: "error", step: "sweep" });
+      await ctx.log(`Refresh failed: ${e.message}`, { level: "error", step: "refresh" });
       ctx.setStatus("failure");
-      ctx.setSummary(`Sweep failed: ${e.message}`);
+      ctx.setSummary(`Refresh failed: ${e.message}`);
       return;
     }
 
-    ctx.setItemsProcessed(res.built);
-    ctx.setStatus(res.errored > 0 && res.built === 0 ? "failure" : res.errored > 0 ? "partial" : "success");
+    ctx.setItemsProcessed(res.generated);
+    ctx.setStatus(res.errored > 0 && res.generated === 0 ? "failure" : res.errored > 0 ? "partial" : "success");
     ctx.setSummary(
-      res.checked === 0
-        ? "No client settings to profile."
-        : `Re-synced ${res.built} profile(s) of ${res.checked} client(s)${res.errored ? ` · ${res.errored} errors` : ""}.`
+      res.considered === 0
+        ? "No clients to profile yet."
+        : `Researched ${res.generated} stale profile(s)${res.skipped ? ` · ${res.skipped} skipped (edited)` : ""}${res.errored ? ` · ${res.errored} errors` : ""} of ${res.considered} clients.`
     );
   },
 });

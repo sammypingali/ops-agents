@@ -61,7 +61,7 @@ Only **10 Outreach QA** is truly *not* scheduled — it runs **inline** inside t
 | every 30 min (:20, :50) | 04 outreach |
 | every 30 min | 08 inbound email scan + reply draft |
 | 14:00 | 07 escalation + nudge |
-| every hour (:00) | 12 client profile (backstop; normally inline) |
+| every hour (:00) | 12 client profile (backstop; normally on-demand) |
 | 18:00 | fleet summary |
 | — (inline) | 10 QA (runs inside draft staging) |
 | — (paused) | 09 doc refresh, 11 CSV push |
@@ -106,8 +106,8 @@ Not built. A future draft-producer (refresh out-of-date specs/COAs).
 ### Agent 11 — Lead Scanner CSV Push · paused (`training_wheels=true`)
 `lead-scanner-csv-push/index.ts`. Per-supplier CSV of dropped/terminal leads to Andrew (Tenkara eng). Currently paused.
 
-### Agent 12 — Client Profile · event-driven (inline) + hourly backstop
-`client-profile/index.ts` + `src/lib/client-profile.ts`. Maintains a `client_profiles` row per org: copies the current `client_settings` in, derives `client_type` (active/ghost/skip/prospect — generalizing the active/ghost lists in `quote-revalidation/config.ts`), and snapshots OA activity (lead + draft counts). **Primary trigger is event-driven:** the Client Profile tab's Save/Finalize server actions (`src/app/actions/client-settings.ts`) call `rebuildClientProfile(orgId)` inline, so the profile updates the moment ops change a client's settings. The **hourly scheduled run is a backstop** — `rebuildStaleClientProfiles` re-syncs any org whose `client_profiles.settings_synced_at` ≠ `client_settings.updated_at` (e.g. an inline build failed). OA read/write only — never touches Tenkara or Missive. The profile is the "rendition" shown at the top of each org's Client Profile tab; the editable settings form sits below it.
+### Agent 12 — Client Profile · on-demand + hourly backstop
+`client-profile/index.ts` + `src/lib/client-profile.ts`. **Researches** a client and writes a summarized `client_profiles` row per org. `generateClientProfile()` gathers four inputs — (1) the client's **Tenkara data** (quotes, suppliers, materials, contacts — read-only, best-effort), (2) any **`client_settings`** entries ops typed, (3) **uploaded info** (`client_uploads`: notes + extracted file text), (4) **open-web research** via Anthropic `web_search` (Sonnet) — then summarizes into `summary` + `highlights` + `sources`, and derives `client_type` (active/ghost/skip/prospect) from settings + activity. **Triggers:** on-demand (the "Generate / Regenerate" button on the org's Client Profile tab) and automatically when ops add a note/file. The **hourly run is a light backstop** (`refreshStaleClientProfiles`, capped ~3/run since each call hits web_search) that re-researches stale/missing profiles. Ops can **edit** the summary/type to correct it, which sets `manual_override` so auto-refresh skips it (an explicit Regenerate overrides). OA writes only; never stages drafts. Uploads land in the private `client-uploads` storage bucket; text/markdown/csv is extracted inline (other types stored, parsing is a fast-follow).
 
 ---
 

@@ -128,9 +128,9 @@ export const AGENT_SPECS: AgentSpec[] = [
     slug: "agent-12-client-profile",
     name: "Client Profile",
     status: "shipped",
-    cadence: "Event-driven (inline on settings change) + hourly backstop · America/New_York",
-    purpose: "Maintain a per-client profile (client_type + activity snapshot) that updates whenever ops change a client's settings, so clients are identifiable at a glance on their org tab.",
-    automatic: "On any save/finalize of a client's settings, rebuilds client_profiles inline: copies the settings in, derives client_type (active/ghost/skip/prospect), and snapshots OA activity (leads, drafts). The hourly run is a backstop that re-syncs any profile that drifted from its settings. OA-only — never reads Tenkara or stages drafts.",
-    humanInput: "Fill in the client settings on each org's Client Profile tab and Save (or Finalize). The profile updates immediately.",
+    cadence: "On-demand (per client) + hourly backstop · America/New_York",
+    purpose: "Research each client and summarize a profile — who they are, what they source, how to work with them — so clients are identifiable at a glance on their org tab.",
+    automatic: "Combs the open web (Anthropic web_search) and combines it with the client's Tenkara data, any settings ops entered, and uploaded info, then summarizes into the profile (summary + highlights + sources) and derives client_type. Runs on-demand and on upload; an hourly backstop re-researches a few stale profiles. OA writes only.",
+    humanInput: "Click Generate on the org's Client Profile tab, upload any extra info, and edit the summary if something's wrong (your edit is preserved until you regenerate).",
   },
 ];
