@@ -156,9 +156,15 @@ async function missiveGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+// Missive caps the conversation-list endpoints at limit=50 (returns 400
+// otherwise), same shape as the messages endpoint cap. Clamp so callers asking
+// for more don't 400 the whole run.
+const MAX_CONVERSATION_LIMIT = 50;
+
 export async function listTeamConversations(teamId: string, limit = 50): Promise<MissiveConversation[]> {
+  const safeLimit = Math.min(Math.max(1, limit), MAX_CONVERSATION_LIMIT);
   const body = await missiveGet<{ conversations: MissiveConversation[] }>(
-    `/conversations?team_all=${encodeURIComponent(teamId)}&limit=${limit}`
+    `/conversations?team_all=${encodeURIComponent(teamId)}&limit=${safeLimit}`
   );
   return body.conversations ?? [];
 }
@@ -166,8 +172,9 @@ export async function listTeamConversations(teamId: string, limit = 50): Promise
 // Conversations tagged with a given shared label (used by Agent 13 to scope to
 // a single client's correspondence, e.g. the "Bobber Labs" label).
 export async function listLabelConversations(sharedLabelId: string, limit = 50): Promise<MissiveConversation[]> {
+  const safeLimit = Math.min(Math.max(1, limit), MAX_CONVERSATION_LIMIT);
   const body = await missiveGet<{ conversations: MissiveConversation[] }>(
-    `/conversations?shared_label=${encodeURIComponent(sharedLabelId)}&limit=${limit}`
+    `/conversations?shared_label=${encodeURIComponent(sharedLabelId)}&limit=${safeLimit}`
   );
   return body.conversations ?? [];
 }
