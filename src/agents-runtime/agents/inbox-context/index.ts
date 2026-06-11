@@ -15,7 +15,9 @@ import Anthropic from "@anthropic-ai/sdk";
 // supplier_email_context (OA).
 
 const STALE_DAYS = 21;
-const MAX_CONVERSATIONS = 200;
+// Missive caps the conversation-list endpoint at 50 (listLabelConversations
+// clamps anyway). Requesting more 400s the whole run.
+const MAX_CONVERSATIONS = 50;
 const MESSAGES_PER_CONVERSATION = 10;
 // Cap LLM summaries so a big inbox can't blow the run budget. Threads beyond
 // this still get a heuristic summary from the latest message preview.
