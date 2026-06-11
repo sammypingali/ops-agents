@@ -51,8 +51,8 @@ export default async function DraftDetail({ params }: { params: { id: string } }
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <DetailRow label="Supplier" value={d.supplier_id} />
-          <DetailRow label="Material" value={d.material_id} />
+          <DetailRow label="Supplier" value={(d.metadata as any)?.supplier_name ?? d.supplier_id} />
+          <DetailRow label="Material" value={(d.metadata as any)?.material_name ?? d.material_id} />
           <DetailRow label="Quote" value={d.quote_id} />
           <DetailRow label="Missive thread" value={d.thread_id} />
 
