@@ -2,7 +2,17 @@ import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getConversationMessages, getMessage, htmlToText } from "@/lib/missive";
 import { stageDraft } from "@/lib/draft-staging";
+import { postAgentAlert } from "@/lib/slack-alert";
 import Anthropic from "@anthropic-ai/sdk";
+
+// Real Bobber Labs context (from bobberlabs.com / how the client is set up).
+// The agent may use ONLY what's here for company context — never beyond it.
+// Long-term, per-client order specs (PO quantities, ship-to, grades) come from
+// Tackle Box client settings; until then they're unknown and must be asked for.
+const BOBBER_LABS_PROFILE = `Bobber Labs is a supplement contract manufacturer. We do NOT know order quantities, ship-to locations, or material grades unless they are stated in our original outreach below or provided by ops. Those are not to be guessed.`;
+
+// Slack user to tag on gap/bounce alerts (the operator who fills client gaps).
+const ALERT_USER_ID = process.env.OPS_ALERT_SLACK_USER_ID || "U09PNM3K0QH";
 
 // Agent 15 - Supplier Reply Manager.
 // Owns the supplier-facing conversation AFTER Agent 08 detects a reply. For each
@@ -25,6 +35,8 @@ type FlowStatus =
   | "outreach_sent"
   | "reply_received"
   | "responded"
+  | "awaiting_human"   // we need info we don't have; a human was Slacked
+  | "bounced"          // delivery failure; need another address for the supplier
   | "price_captured"
   | "finalized"
   | "stale"
@@ -33,38 +45,45 @@ type FlowStatus =
 interface Classification {
   category: "price_given" | "no_record" | "question" | "partial" | "declined" | "auto_reply";
   needs_response: boolean;
+  needs_info: boolean;        // responding requires info we don't have -> ask a human
+  info_questions: string[];   // the specific gaps to ask the human
   subject: string;
   body: string;
   reason: string;
 }
 
-const SYSTEM = `You manage a procurement team's supplier email thread. We previously asked a supplier to confirm/refresh pricing. Given their latest reply, classify it and, when useful, draft our next message. The operator reviews and SENDS it, so never invent prices, quantities, ship dates, or commitments.
+const SYSTEM = `You manage a procurement team's supplier email thread for Bobber Labs. We previously asked a supplier to confirm/refresh pricing. Given their latest reply, classify it and, when useful, draft our next message. The operator reviews and SENDS it.
+
+BOBBER LABS PROFILE (the ONLY company facts you may use):
+${BOBBER_LABS_PROFILE}
+
+ABSOLUTE RULE — NEVER FABRICATE:
+Do not state any fact we don't actually have: no quantities, volumes, order sizes, grades, ship-to addresses, ZIP codes, prices, dates, or commitments. If responding properly requires such info and it is NOT in OUR ORIGINAL OUTREACH below or the profile, you MUST set "needs_info": true and list the exact gaps in "info_questions" — do NOT guess or fill them in. It is always better to ask a human than to invent.
 
 Classify into exactly one category:
 - "price_given": they provided pricing (or attached a price list). No further chase needed.
-- "no_record": they say they have no record / can't tie our quote back. Reframe: politely drop the old-quote angle and ask for their CURRENT pricing, lead time, and MOQ for the listed materials.
-- "question": they asked us something (quantity, specs, MOQ, application). Answer only from the context given; if we don't have it, ask them to share their standard terms so we can proceed.
+- "no_record": they have no record / can't tie our quote back. Reframe: drop the old-quote angle and ask for their CURRENT pricing, lead time, and MOQ for the listed materials. If they say they don't carry a material, drop that material.
+- "question": they asked us something. Answer ONLY from given context; if it needs info we don't have, set needs_info=true.
 - "partial": they replied but the price is missing/incomplete. Nudge specifically for the missing pricing.
 - "declined": they can't or won't supply. Acknowledge and close gracefully.
-- "auto_reply": out-of-office / automated / bounce / non-human. No response.
+- "auto_reply": out-of-office / automated / non-human (NOT a bounce — bounces are handled separately). No response.
 
 needs_response: true only for no_record, question, partial (and declined -> a brief courteous close). false for price_given and auto_reply.
+needs_info: true when a proper response requires order specifics (quantity, grade, ship-to, application) we don't have. When true, leave subject/body empty and fill info_questions; we will ask a human instead of drafting.
 
-DRAFTING RULES when needs_response is true:
-- Greet the supplier contact by FIRST name when we have one ("Hi Andre,"); otherwise "Hi {Company} Team,".
-- Read their actual message and respond to what they SAID, not a template.
-- ALWAYS end with one explicit, concrete ask: their current pricing, lead time, and MOQ for the specific materials (list them). Never leave the ask vague ("happy to work from your terms" is NOT acceptable).
-- When we have prior pricing on file (shown in OUR ORIGINAL OUTREACH below), you may reference it lightly as a starting point, but never insist on it.
+DRAFTING RULES when needs_response is true and needs_info is false:
+- Greet the contact by FIRST name when we have one ("Hi Andre,"); otherwise "Hi {Company} Team,".
+- Respond to what they ACTUALLY said (e.g. drop a material they don't carry), not a template.
+- ALWAYS end with one explicit, concrete ask: current pricing, lead time, and MOQ for the specific materials they CAN supply (list them by name).
+- You may reference our prior pricing (in OUR ORIGINAL OUTREACH) lightly, never insist on it.
 
-VOICE (match exactly): warm, lightly informal, professional. Every thought its own short paragraph with a blank line between. Body under 120 words. NEVER use em or en dashes. Never fabricate prior calls. Sign off EXACTLY:
+VOICE: warm, lightly informal, professional. Every thought its own short paragraph with a blank line between. Body under 120 words. NEVER use em or en dashes. Never fabricate prior calls. Sign off EXACTLY:
 Thanks,
 
 Procurement Team
 Bobber Labs
 
-Never name any underlying client other than Bobber Labs.
-
-Return ONLY JSON: {"category": "...", "needs_response": true|false, "subject": "...", "body": "...", "reason": "<one line>"}. If needs_response is false, subject/body may be empty strings.`;
+Return ONLY JSON: {"category":"...","needs_response":true|false,"needs_info":true|false,"info_questions":["..."],"subject":"...","body":"...","reason":"<one line>"}. If needs_response is false or needs_info is true, subject/body may be empty strings.`;
 
 const sani = (s: string) => s.replace(/\s*[—–]\s*/g, ", ").replace(/\n{3,}/g, "\n\n").trim();
 
@@ -106,6 +125,8 @@ async function classifyAndDraft(opts: {
     return {
       category: p.category,
       needs_response: !!p.needs_response,
+      needs_info: !!p.needs_info,
+      info_questions: Array.isArray(p.info_questions) ? p.info_questions.map(String) : [],
       subject: sani(String(p.subject ?? "")),
       body: sani(String(p.body ?? "")),
       reason: String(p.reason ?? ""),
@@ -149,12 +170,12 @@ registerAgent({
       byThread.set(key, arr);
     }
 
-    let responded = 0, priced = 0, stale = 0, closed = 0, skipped = 0;
+    let responded = 0, priced = 0, stale = 0, closed = 0, skipped = 0, bounced = 0, awaitingHuman = 0;
     for (const [threadId, rows] of byThread) {
       const head: any = rows[0];
       const meta = head.metadata ?? {};
       const status: FlowStatus = meta.flow_status ?? "reply_received";
-      if (["price_captured", "finalized", "stale", "closed_declined"].includes(status)) { skipped++; continue; }
+      if (["price_captured", "finalized", "stale", "closed_declined", "awaiting_human", "bounced"].includes(status)) { skipped++; continue; }
 
       // If a price already landed for this thread, mark it and move on.
       const supplierIds = rows.map((r) => r.supplier_id).filter(Boolean);
@@ -185,6 +206,7 @@ registerAgent({
       let theirBody: string | null = meta.reply_detected?.reply_preview ?? null;
       let theirSubject: string | null = meta.reply_detected?.reply_subject ?? null;
       let contactName: string | null = meta.reply_detected?.reply_sender_name ?? null;
+      let senderAddr: string | null = meta.reply_detected?.reply_sender_email ?? null;
       try {
         if (replyMsgId) {
           const full = await getMessage(replyMsgId);
@@ -192,6 +214,7 @@ registerAgent({
             theirBody = htmlToText(full.body) || full.preview || theirBody;
             theirSubject = full.subject ?? theirSubject;
             contactName = full.from_field?.name ?? contactName;
+            senderAddr = full.from_field?.address ?? senderAddr;
           }
         } else {
           const convId = meta.reply_detected?.reply_conversation_id ?? threadId;
@@ -202,6 +225,18 @@ registerAgent({
         }
       } catch (e: any) {
         await ctx.log(`Missive fetch failed for ${replyMsgId ?? threadId}: ${e.message}`, { level: "warn", step: "fetch" });
+      }
+
+      // Bounce / delivery failure -> never thank anyone; alert ops to find another address.
+      if (isBounce(senderAddr, theirSubject)) {
+        await postAgentAlert(
+          `:warning: *Bounce* on outreach to *${meta.supplier_name ?? meta.supplier_contact_email ?? "a supplier"}* (${meta.supplier_contact_email ?? "?"}). The email did not deliver. Please find another email source for this supplier.`,
+          { mentionUserId: ALERT_USER_ID }
+        );
+        await setStatus(admin, rows, "bounced", { note: `bounce from ${senderAddr ?? "?"}` });
+        bounced++;
+        await ctx.log(`Bounce on ${meta.supplier_name ?? threadId}`, { step: "bounce" });
+        continue;
       }
 
       const materials = Array.from(new Set(rows.map((r) => (r.metadata as any)?.material_name).filter(Boolean)));
@@ -215,6 +250,19 @@ registerAgent({
         theirBody,
       });
       if (!cls) { skipped++; continue; }
+
+      // Gap: responding needs info we don't have -> ask a human, never fabricate.
+      if (cls.needs_info) {
+        const qs = cls.info_questions.length ? cls.info_questions : ["order quantity, grade, and ship-to for the materials"];
+        await postAgentAlert(
+          `:wrench: *Gap-fill needed* for *${meta.supplier_name ?? "supplier"}* (${meta.supplier_contact_email ?? "?"}). To reply without fabricating, I need:\n${qs.map((q) => `• ${q}`).join("\n")}\nReply here and I will draft it.`,
+          { mentionUserId: ALERT_USER_ID }
+        );
+        await setStatus(admin, rows, "awaiting_human", { note: `needs_info: ${qs.join("; ")}` });
+        awaitingHuman++;
+        await ctx.log(`Gap-fill alerted for ${meta.supplier_name ?? threadId}`, { step: "gap" });
+        continue;
+      }
 
       if (cls.category === "price_given") { await setStatus(admin, rows, "price_captured", { note: "supplier provided price (await extraction)" }); priced++; continue; }
       if (cls.category === "auto_reply") { skipped++; continue; }
@@ -248,11 +296,20 @@ registerAgent({
       }
     }
 
-    ctx.setItemsProcessed(responded + priced + stale + closed);
+    ctx.setItemsProcessed(responded + priced + stale + closed + bounced + awaitingHuman);
     ctx.setStatus("success");
-    ctx.setSummary(`Threads: ${byThread.size} · ${responded} responded · ${priced} priced · ${stale} stale · ${closed} closed · ${skipped} skipped`);
+    ctx.setSummary(`Threads: ${byThread.size} · ${responded} responded · ${priced} priced · ${awaitingHuman} awaiting-human · ${bounced} bounced · ${stale} stale · ${closed} closed · ${skipped} skipped`);
   },
 });
+
+// Heuristic bounce / delivery-failure detector (sender or subject).
+function isBounce(senderAddr: string | null, subject: string | null): boolean {
+  const a = (senderAddr ?? "").toLowerCase();
+  const s = (subject ?? "").toLowerCase();
+  if (/mailer-daemon|postmaster@|maildelivery|mail-daemon/.test(a)) return true;
+  if (/undeliverable|delivery status notification|delivery (has )?failed|failure notice|returned mail|address not found|recipient.*(reject|not found)|message could not be delivered|mail delivery failed/.test(s)) return true;
+  return false;
+}
 
 async function setStatus(
   admin: ReturnType<typeof createAdminClient>,
