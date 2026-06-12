@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { seesAllOrgs } from "@/lib/org-access";
-import { Card, CardContent } from "@/components/ui/card";
 import { PageExplainer } from "@/components/page-explainer";
+import { ClientsGrid } from "@/components/clients-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -45,20 +44,7 @@ export default async function ClientsPage() {
       {orgRows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No clients assigned yet.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {orgRows.map((o) => (
-            <Link key={o.slug} href={`/clients/${o.slug}`}>
-              <Card className="tb-surface shadow-none transition-colors hover:border-foreground/30">
-                <CardContent className="py-5">
-                  <div className="font-medium">{o.name}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {o.is_internal ? "Internal" : "Client workspace"}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <ClientsGrid orgs={orgRows} />
       )}
     </div>
   );

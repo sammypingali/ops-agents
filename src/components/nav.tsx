@@ -13,6 +13,10 @@ export interface OrgItem {
   isInternal?: boolean;
 }
 
+// Sidebar shows a capped quick-list; the full set lives on the searchable
+// /clients page so the nav stays usable at hundreds of clients.
+const CLIENT_CAP = 8;
+
 export function Shell({
   session,
   orgs,
@@ -40,14 +44,14 @@ export function Shell({
         <nav className="flex-1 px-3 text-sm space-y-0.5 overflow-y-auto">
           <NavLink href="/inbox" match="prefix">Inbox</NavLink>
 
-          <div className="flex items-center justify-between px-3 pt-4 pb-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Clients</span>
+          <Link href="/clients" className="group flex items-center justify-between px-3 pt-4 pb-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold group-hover:text-foreground">Clients</span>
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {allOrgs ? "All" : `${orgs.length} assigned`}
             </span>
-          </div>
+          </Link>
           {orgs.length === 0 && <div className="text-xs text-muted-foreground px-3">No clients assigned yet</div>}
-          {orgs.map((o) => (
+          {orgs.slice(0, CLIENT_CAP).map((o) => (
             <NavLink key={o.slug} href={`/clients/${o.slug}`} match="prefix">
               <span className={o.isInternal ? "text-muted-foreground" : ""}>
                 {o.name}
@@ -55,6 +59,11 @@ export function Shell({
               </span>
             </NavLink>
           ))}
+          {orgs.length > CLIENT_CAP && (
+            <Link href="/clients" className="block px-3 py-1.5 ml-3.5 text-xs text-primary hover:underline">
+              View all {orgs.length} clients →
+            </Link>
+          )}
 
           <div className="pt-4">
             <NavLink href="/settings" match="prefix">Settings</NavLink>
@@ -84,14 +93,19 @@ export function Shell({
   );
 }
 
-// Placeholder mark — interlocking-circles Tenkara wordmark to be swapped in from
-// the media kit at build-token stage. Keeps the brand blue until then.
+// Tenkara interlocking-loop mark (figure-eight knot) in brand blue + cream.
+// Faithful recreation of the media-kit mark; swap the official SVG 1:1 if exported.
 function TenkaraMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect width="64" height="64" rx="14" fill="#0011FF" />
-      <circle cx="26" cy="32" r="11" stroke="#F7F6F5" strokeWidth="4" />
-      <circle cx="38" cy="32" r="11" stroke="#F7F6F5" strokeWidth="4" />
+      <path
+        d="M32 32 C 27 22.5, 13 22.5, 13 32 C 13 41.5, 27 41.5, 32 32 C 37 22.5, 51 22.5, 51 32 C 51 41.5, 37 41.5, 32 32 Z"
+        stroke="#F7F6F5"
+        strokeWidth="5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
