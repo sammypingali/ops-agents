@@ -11,13 +11,15 @@ import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
 
 export const dynamic = "force-dynamic";
 
-// Inbox — the single cross-client surface. Priority work across the clients an
-// operator is assigned to. Stage 1: surfaces staged drafts (assigned + unclaimed);
-// later stages fold in replies, escalations, approvals, price alerts, revalidations.
-export default async function InboxPage() {
+// Home — the cross-client dashboard. A prioritized roll-up of "where do I start?"
+// across the operator's clients, linking into each client's Queue for the full
+// list. NOT a flat inbox (that duplicated the per-client Queue). Stage 1 shows
+// the one real cross-client signal we have (staged drafts to review) + the
+// attention tiles/sections that fill in once exercises + queue data land.
+export default async function HomePage() {
   const session = (await getSession())!;
   const admin = createAdminClient();
-  const orgIds = await getAssignedOrgIds(session); // null = sees all clients
+  const orgIds = await getAssignedOrgIds(session); // null = sees all
   const scope = (q: any) => (orgIds ? q.in("org_id", orgIds) : q);
 
   const { data: assignedDrafts } = await admin
@@ -26,7 +28,7 @@ export default async function InboxPage() {
     .eq("assigned_operator", session.userId)
     .eq("status", "staged")
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(12);
 
   const { data: unassignedDrafts } = await scope(
     admin
@@ -35,21 +37,19 @@ export default async function InboxPage() {
       .is("assigned_operator", null)
       .eq("status", "staged")
       .order("created_at", { ascending: false })
-      .limit(15)
+      .limit(8)
   );
 
   const allDrafts = [...(assignedDrafts ?? []), ...(unassignedDrafts ?? [])];
-  const supplierIds = allDrafts.map((d: any) => d.supplier_id).filter(Boolean);
-  const materialIds = allDrafts.map((d: any) => d.material_id).filter(Boolean);
   let supplierNames = new Map<string, string>();
   let materialNames = new Map<string, string>();
   try {
     [supplierNames, materialNames] = await Promise.all([
-      resolveSupplierNamesWithFallback(supplierIds),
-      resolveMaterialNames(materialIds),
+      resolveSupplierNamesWithFallback(allDrafts.map((d: any) => d.supplier_id).filter(Boolean)),
+      resolveMaterialNames(allDrafts.map((d: any) => d.material_id).filter(Boolean)),
     ]);
   } catch {
-    /* fall back to ids if Tenkara is unreachable */
+    /* fall back to ids */
   }
 
   const hour = new Date().getHours();
@@ -60,27 +60,46 @@ export default async function InboxPage() {
     ? "all clients"
     : `${orgIds?.length ?? 0} client${(orgIds?.length ?? 0) === 1 ? "" : "s"}`;
 
+  const tiles = [
+    { label: "Exercises active", value: "—" },
+    { label: "Responses pending", value: "—" },
+    { label: "Approvals waiting", value: "—" },
+    { label: "Quotes expiring", value: "—" },
+  ];
+
   return (
     <div className="space-y-8 max-w-6xl">
       <header>
         <h1 className="font-serif text-4xl tracking-tight">
           {greeting}{firstName ? `, ${firstName}` : ""}
         </h1>
-        <p className="text-sm text-muted-foreground mt-2">Priority work across your clients.</p>
+        <p className="text-sm text-muted-foreground mt-2">Where to start today, across your clients.</p>
         <p className="text-xs text-muted-foreground mt-1">
           Signed in as <span className="font-medium text-foreground">{primaryRoleLabel}</span> · covering {scopeLabel}.
         </p>
       </header>
 
-      <PageExplainer tag="Your inbox.">
-        The one cross-client surface. Everything else in Control Room is scoped to a single client. Agents stage work here for
-        review — nothing sends until you click Send in Missive.
+      {/* Attention tiles — populate once exercises + queue data land (Stage 2/3). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {tiles.map((t) => (
+          <Card key={t.label} className="tb-surface shadow-none">
+            <CardContent className="py-5">
+              <div className="text-2xl font-serif">{t.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <PageExplainer tag="Home.">
+        A prioritized roll-up across your clients — attention items link straight into the relevant client&apos;s Queue. The full
+        actionable list for any one client lives in that client&apos;s Queue tab.
       </PageExplainer>
 
       <Card className="tb-surface shadow-none">
         <CardHeader>
           <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">
-            Assigned to you <span className="ml-1 text-foreground">· {assignedDrafts?.length ?? 0}</span>
+            Drafts to review <span className="ml-1 text-foreground">· {assignedDrafts?.length ?? 0} assigned</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -89,20 +108,11 @@ export default async function InboxPage() {
           ) : (
             <p className="text-sm text-muted-foreground">Nothing assigned to you right now.</p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="tb-surface shadow-none">
-        <CardHeader>
-          <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground font-medium">
-            Unclaimed in your clients <span className="ml-1 text-foreground">· {unassignedDrafts?.length ?? 0}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {unassignedDrafts && unassignedDrafts.length > 0 ? (
-            <DraftTable rows={unassignedDrafts as any} supplierNames={supplierNames} materialNames={materialNames} />
-          ) : (
-            <p className="text-sm text-muted-foreground">Inbox zero — nothing waiting for pickup.</p>
+          {unassignedDrafts && unassignedDrafts.length > 0 && (
+            <div className="mt-5">
+              <div className="text-xs text-muted-foreground mb-2">Unclaimed in your clients · {unassignedDrafts.length}</div>
+              <DraftTable rows={unassignedDrafts as any} supplierNames={supplierNames} materialNames={materialNames} />
+            </div>
           )}
         </CardContent>
       </Card>

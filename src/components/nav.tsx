@@ -40,7 +40,7 @@ export function Shell({
         </div>
 
         <nav className="flex-1 px-3 text-sm space-y-0.5 overflow-y-auto">
-          <NavLink href="/inbox" match="prefix">Inbox</NavLink>
+          <NavLink href="/home" match="prefix">Home</NavLink>
 
           <Link href="/clients" className="group flex items-center justify-between px-3 pt-4 pb-1.5">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold group-hover:text-foreground">Clients</span>
