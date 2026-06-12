@@ -13,9 +13,9 @@ export interface OrgItem {
   isInternal?: boolean;
 }
 
-// Sidebar shows a capped quick-list; the full set lives on the searchable
-// /clients page so the nav stays usable at hundreds of clients.
-const CLIENT_CAP = 8;
+// Sidebar shows a capped quick-list (alphabetical); the full A→Z set lives on
+// the searchable /clients page so the nav stays usable at hundreds of clients.
+const CLIENT_CAP = 5;
 
 export function Shell({
   session,
@@ -35,10 +35,7 @@ export function Shell({
           <Link href="/" className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/tenkara-mark.png" alt="Tenkara" className="h-8 w-8 shrink-0" />
-            <div>
-              <div className="font-serif text-2xl tracking-tight leading-none">Control Room</div>
-              <div className="text-xs text-muted-foreground mt-1">Tenkara sourcing</div>
-            </div>
+            <div className="font-serif text-2xl tracking-tight leading-none">Control Room</div>
           </Link>
         </div>
 
