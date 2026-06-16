@@ -7,8 +7,9 @@ import { postSlackMessage, deepLink } from "@/lib/slack";
 // A data-integrity sweep over the other agents' outputs. It does NOT fix data —
 // it checks that things landed properly and calls out issues so ops can act.
 // Checks (all OA-side, read-only on Tenkara):
-//   1. Replies detected but never drafted — email-scanner saw a supplier reply
-//      but the reply draft failed to stage (reply_detected set, reply_draft not).
+//   1. Replies detected but never drafted — a supplier reply was seen but no
+//      drafting path acted on it (no reply_draft / missive_draft_link /
+//      reply-manager draft and flow_status never progressed).
 //   2. Staged quotes missing required data — pending rows with no price, no
 //      material name, or an unresolved material_id/supplier_id.
 //   3. Low-confidence staged quotes waiting on review.
@@ -45,8 +46,26 @@ registerAgent({
         .select("id, metadata")
         .neq("status", "discarded")
         .not("metadata->reply_detected", "is", null);
+      // A reply counts as handled if any drafting path acted on it: the legacy
+      // email-scanner key (reply_draft), or Agent 15's reply-manager markers
+      // (missive_draft_link / reply_manager_response draft / a progressed
+      // flow_status). Only reply_detected with none of these is a real miss.
+      const handledFlowStatuses = new Set([
+        "responded",
+        "price_captured",
+        "awaiting_human",
+        "stale",
+        "closed_declined",
+        "closed_won",
+        "closed",
+      ]);
+      const isHandled = (m: any) =>
+        !!m?.reply_draft ||
+        !!m?.missive_draft_link ||
+        m?.draft_kind === "reply_manager_response" ||
+        handledFlowStatuses.has(m?.flow_status);
       const undrafted = (refs ?? []).filter(
-        (r: any) => r.metadata?.reply_detected && !r.metadata?.reply_draft
+        (r: any) => r.metadata?.reply_detected && !isHandled(r.metadata)
       );
       if (undrafted.length) {
         issues.push({
