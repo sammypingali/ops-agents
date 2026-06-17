@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, hasAnyRole } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getAssignedOrgIds } from "@/lib/org-access";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { getPricePulse } from "@/lib/price-pulse";
 
@@ -13,15 +15,34 @@ function money(n: number | null): string {
 export default async function PricePulsePage({
   searchParams,
 }: {
-  searchParams: { q?: string; min?: string };
+  searchParams: { q?: string; min?: string; client?: string };
 }) {
   const session = (await getSession())!;
   if (!hasAnyRole(session, ["admin", "ops_lead", "ops_operator", "monitor"])) redirect("/work");
 
   const minQuotes = Math.max(2, Number(searchParams.min ?? "3") || 3);
   const search = (searchParams.q ?? "").trim().toLowerCase();
+  const clientSlug = (searchParams.client ?? "").trim();
 
-  let pulse = await getPricePulse({ minQuotes, limit: 500 });
+  // Client filter options — only orgs linked to a Tenkara org (others have no
+  // quotes), scoped to the operator's assignments.
+  const admin = createAdminClient();
+  const assigned = await getAssignedOrgIds(session);
+  let orgQuery = admin
+    .from("orgs")
+    .select("slug, name, tenkara_org_id")
+    .not("tenkara_org_id", "is", null)
+    .order("name");
+  if (assigned) orgQuery = orgQuery.in("id", assigned);
+  const { data: orgs } = await orgQuery;
+  const clientOptions = (orgs ?? []) as { slug: string; name: string; tenkara_org_id: string }[];
+  const selectedClient = clientSlug ? clientOptions.find((o) => o.slug === clientSlug) ?? null : null;
+
+  let pulse = await getPricePulse({
+    minQuotes,
+    limit: 500,
+    tenkaraOrgId: selectedClient?.tenkara_org_id ?? null,
+  });
   if (search) pulse = pulse.filter((p) => p.material_name.toLowerCase().includes(search));
 
   return (
@@ -37,21 +58,43 @@ export default async function PricePulsePage({
         </p>
       </div>
 
-      <form className="flex gap-2 text-sm" action="/work/price-pulse" method="get">
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ""}
-          placeholder="Filter materials…"
-          className="rounded border border-border bg-background px-2 py-1 text-sm w-56"
-        />
-        <input
-          name="min"
-          defaultValue={String(minQuotes)}
-          inputMode="numeric"
-          className="rounded border border-border bg-background px-2 py-1 text-sm w-20"
-          title="Minimum quotes per material"
-        />
-        <button type="submit" className="rounded border border-border px-3 py-1 hover:bg-secondary">Apply</button>
+      <form className="flex flex-wrap items-end gap-3 text-sm" action="/work/price-pulse" method="get">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Client</span>
+          <select
+            name="client"
+            defaultValue={clientSlug}
+            className="rounded border border-border bg-background px-2 py-1 text-sm w-52"
+          >
+            <option value="">All clients</option>
+            {clientOptions.map((o) => (
+              <option key={o.slug} value={o.slug}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Material</span>
+          <input
+            name="q"
+            defaultValue={searchParams.q ?? ""}
+            placeholder="Filter materials…"
+            className="rounded border border-border bg-background px-2 py-1 text-sm w-56"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground" title="Hide materials with fewer than this many quotes — filters out thin, noisy data.">
+            Min quotes
+          </span>
+          <input
+            name="min"
+            defaultValue={String(minQuotes)}
+            inputMode="numeric"
+            className="rounded border border-border bg-background px-2 py-1 text-sm w-20"
+          />
+        </label>
+        <button type="submit" className="rounded border border-border px-3 py-1 hover:bg-secondary h-[34px]">Apply</button>
       </form>
 
       <Table>
