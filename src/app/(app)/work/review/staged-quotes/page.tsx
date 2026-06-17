@@ -6,6 +6,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell } from "@/components
 import { getAssignedOrgIds, seesAllOrgs } from "@/lib/org-access";
 import { StagedQuoteRow, StagedQuoteHeaders, stagedQuoteColSpan, STAGED_CONF_ORDER } from "@/components/staged-quote-row";
 import { StagedQuotesExportCsvButton } from "@/components/staged-quotes-export-csv-button";
+import { resolveMaterialGrades } from "@/lib/tenkara-names";
 import { ListPageHeader } from "@/components/list-page-header";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,15 @@ export default async function StagedQuotesPage({
   let staged = (rows ?? []) as unknown as StagedRow[];
   // Lowest-confidence first so ops triages the riskiest extractions up top.
   staged = staged.sort((a, b) => (STAGED_CONF_ORDER[a.confidence] ?? 9) - (STAGED_CONF_ORDER[b.confidence] ?? 9));
+
+  // Grade lives on the Tenkara material — resolve by material_id.
+  let grades = new Map<string, string>();
+  try {
+    grades = await resolveMaterialGrades(staged.map((r) => r.material_id).filter(Boolean) as string[]);
+  } catch {
+    // Tenkara unreachable — fall back to no grade.
+  }
+  staged = staged.map((r) => ({ ...r, grade: r.material_id ? grades.get(r.material_id) ?? null : null }));
 
   const canAct = seesAllOrgs(session) || (assigned !== null && assigned.length > 0);
 

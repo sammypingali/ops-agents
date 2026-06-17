@@ -9,6 +9,7 @@ import {
   stagedQuoteColSpan,
   STAGED_CONF_ORDER,
 } from "@/components/staged-quote-row";
+import { resolveMaterialGrades } from "@/lib/tenkara-names";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function OrgQuotesPage({
   const { data: rows, error } = await admin
     .from("staged_quotes")
     .select(
-      "id, source, source_attachment_name, supplier_name, material_name, price, case_size, unit_of_measurement, unit_price, currency, confidence, extraction_notes, status, created_at"
+      "id, source, source_attachment_name, supplier_name, material_id, material_name, price, case_size, unit_of_measurement, unit_price, currency, confidence, extraction_notes, status, created_at"
     )
     .eq("org_id", org.id)
     .eq("status", status)
@@ -42,6 +43,15 @@ export default async function OrgQuotesPage({
     .limit(500);
   let staged = (rows ?? []) as any[];
   staged = staged.sort((a, b) => (STAGED_CONF_ORDER[a.confidence] ?? 9) - (STAGED_CONF_ORDER[b.confidence] ?? 9));
+
+  // Grade lives on the Tenkara material, not the staged quote — resolve by id.
+  let grades = new Map<string, string>();
+  try {
+    grades = await resolveMaterialGrades(staged.map((r) => r.material_id).filter(Boolean));
+  } catch {
+    // Tenkara unreachable — fall back to no grade rather than failing the page.
+  }
+  staged = staged.map((r) => ({ ...r, grade: r.material_id ? grades.get(r.material_id) ?? null : null }));
 
   const assigned = await getAssignedOrgIds(session);
   const canAct =

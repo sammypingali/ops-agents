@@ -23,6 +23,7 @@ export function StagedQuoteHeaders({ showOrg = true }: { showOrg?: boolean }) {
     <TableRow>
       <TableHead>Supplier</TableHead>
       <TableHead>Material</TableHead>
+      <TableHead>Grade</TableHead>
       <TableHead className="text-right">Price</TableHead>
       <TableHead className="text-right">Case</TableHead>
       <TableHead>Unit</TableHead>
@@ -37,7 +38,7 @@ export function StagedQuoteHeaders({ showOrg = true }: { showOrg?: boolean }) {
 
 // Column count for empty-state colSpan. Matches StagedQuoteHeaders.
 export function stagedQuoteColSpan(showOrg = true): number {
-  return showOrg ? 10 : 9;
+  return showOrg ? 11 : 10;
 }
 
 export function StagedQuoteRow({
@@ -56,6 +57,13 @@ export function StagedQuoteRow({
       </TableCell>
       <TableCell className="align-top">
         {r.material_name ?? <span className="text-destructive">— missing —</span>}
+      </TableCell>
+      <TableCell className="align-top text-sm">
+        {r.grade ? (
+          <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs">{r.grade}</span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
       </TableCell>
       <TableCell className="text-right align-top">{fmt(r.price)}</TableCell>
       <TableCell className="text-right align-top">{fmt(r.case_size)}</TableCell>

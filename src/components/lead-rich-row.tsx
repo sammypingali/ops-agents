@@ -125,6 +125,13 @@ export function LeadRichRow({
         {r.payload?.inci_name && (
           <div className="text-xs text-muted-foreground truncate max-w-[28ch]">{r.payload.inci_name}</div>
         )}
+        {r.payload?.grade && (
+          <div className="mt-0.5">
+            <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              {r.payload.grade}
+            </span>
+          </div>
+        )}
         {isScout && (
           <span
             className="mt-1 inline-flex items-center rounded-full bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"

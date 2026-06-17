@@ -30,6 +30,24 @@ export async function resolveMaterialNames(ids: string[]): Promise<Map<string, s
   return out;
 }
 
+// Resolve material grades (materials.grade is a JSON array of {grade_name}).
+// Returns a comma-joined grade string per material id, for surfacing grade on
+// rows that only carry a material_id (e.g. staged quotes).
+export async function resolveMaterialGrades(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = Array.from(new Set(ids.filter((x): x is string => !!x)));
+  if (unique.length === 0) return out;
+  const rows = await tenkaraQuery<{ id: string; grade: string | null }>(
+    `select id::text as id,
+            (select string_agg(g->>'grade_name', ', ')
+               from jsonb_array_elements(coalesce(grade, '[]'::jsonb)) g) as grade
+       from materials where id = any($1::uuid[])`,
+    [unique]
+  );
+  for (const r of rows) if (r.grade) out.set(r.id, r.grade);
+  return out;
+}
+
 // Resolve supplier names, falling back to the name we stored on the lead when
 // Tenkara doesn't have the supplier_id (e.g. scout discoveries, or suppliers
 // deleted/RLS-hidden in Tenkara). draft_references only stores supplier_id, so
