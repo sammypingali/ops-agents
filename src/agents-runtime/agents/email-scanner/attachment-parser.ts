@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import ExcelJS from "exceljs";
 import type { MissiveAttachment } from "@/lib/missive";
 
 // Extract supplier pricing from email attachments. Pricing frequently arrives
@@ -67,8 +68,9 @@ function extractJson(text: string): any {
 // Which attachments are worth parsing for pricing.
 export function isPricingCandidate(att: MissiveAttachment): boolean {
   const ext = (att.extension ?? att.sub_type ?? "").toLowerCase();
-  const PRICE_EXT = ["pdf", "csv", "png", "jpg", "jpeg", "webp", "gif", "tsv", "txt"];
-  // xlsx/xls are binary spreadsheets Claude can't read natively — skip in v1.
+  const PRICE_EXT = ["pdf", "csv", "png", "jpg", "jpeg", "webp", "gif", "tsv", "txt", "xlsx", "xlsm"];
+  // xlsx/xlsm are converted to CSV text before going to Claude (see workbookToText).
+  // Legacy binary .xls is not supported by exceljs and is intentionally skipped.
   return PRICE_EXT.includes(ext) && (att.size ?? 0) <= MAX_BYTES;
 }
 
@@ -97,6 +99,42 @@ function imageMediaType(ext: string): "image/png" | "image/jpeg" | "image/webp" 
   }
 }
 
+function cellToString(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (typeof value === "object") {
+    // exceljs wraps formulas, hyperlinks, rich text, and errors in objects.
+    const v = value as any;
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v.result !== "undefined") return cellToString(v.result); // formula
+    if (typeof v.text === "string") return v.text; // hyperlink / rich text
+    if (Array.isArray(v.richText)) return v.richText.map((r: any) => r.text ?? "").join("");
+    if (typeof v.error === "string") return v.error;
+    return "";
+  }
+  return String(value);
+}
+
+// Convert an xlsx/xlsm workbook into CSV text (one block per sheet) so Claude can
+// read it the same way it reads a plain CSV attachment.
+async function workbookToText(buf: Buffer): Promise<string> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as any);
+  const sheets: string[] = [];
+  wb.eachSheet((sheet) => {
+    const rows: string[] = [];
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+      const cells = values.map((c) => {
+        const s = cellToString(c as ExcelJS.CellValue);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      });
+      if (cells.some((c) => c.trim() !== "")) rows.push(cells.join(","));
+    });
+    if (rows.length) sheets.push(`# Sheet: ${sheet.name}\n${rows.join("\n")}`);
+  });
+  return sheets.join("\n\n");
+}
+
 // Parse a single attachment into quote lines. Returns [] on any failure (the
 // caller logs and moves on — a bad attachment shouldn't fail the agent run).
 export async function parseAttachment(att: MissiveAttachment): Promise<ExtractedQuote[]> {
@@ -118,6 +156,11 @@ export async function parseAttachment(att: MissiveAttachment): Promise<Extracted
       type: "image",
       source: { type: "base64", media_type: imageMediaType(ext)!, data: fetched.buf.toString("base64") },
     };
+  } else if (ext === "xlsx" || ext === "xlsm") {
+    // Excel — convert to CSV text first; Claude can't read the binary natively.
+    const text = (await workbookToText(fetched.buf)).slice(0, 200_000);
+    if (!text.trim()) return [];
+    contentBlock = { type: "text", text: "Attachment contents (spreadsheet exported to CSV):\n\n" + text };
   } else {
     // csv / tsv / txt — send as text.
     const text = fetched.buf.toString("utf-8").slice(0, 200_000);
