@@ -27,7 +27,6 @@ export function Shell({
   children: React.ReactNode;
 }) {
   const allOrgs = seesAllOrgs(session);
-  const canManageOperators = hasAnyRole(session, ["admin", "ops_lead"]);
 
   return (
     <div className="flex min-h-screen">
@@ -67,9 +66,6 @@ export function Shell({
           <div className="pt-4">
             <SectionLabel>Ops tools</SectionLabel>
             <NavLink href="/work/review" match="prefix">Review queue</NavLink>
-            <NavLink href="/work/price-pulse" match="prefix">Price Pulse</NavLink>
-            <NavLink href="/work/exports" match="prefix">Exports</NavLink>
-            {canManageOperators && <NavLink href="/operators" match="prefix">Operators</NavLink>}
           </div>
 
           <div className="pt-4">

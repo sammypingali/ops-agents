@@ -1,21 +1,15 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
+import { getSession, hasAnyRole } from "@/lib/auth";
+import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
 import { LeadsExportCsvButton } from "@/components/leads-export-csv-button";
+import { LeadRichRow, LeadRichHeaders, leadRichColSpan } from "@/components/lead-rich-row";
 import { existingQuotesForOrg, type ExistingQuote } from "@/agents-runtime/agents/lead-creator/sql";
 
 export const dynamic = "force-dynamic";
-
-const STAGE_LABEL: Record<string, string> = {
-  raw: "New",
-  enriched: "Ready to review",
-  ready_for_outreach: "Drafted",
-  ready_for_approval: "Awaiting approval",
-  terminal: "Closed",
-};
 
 export default async function OrgLeadsPage({ params }: { params: { slug: string } }) {
   const admin = createAdminClient();
@@ -24,13 +18,23 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
 
   const { data: rows } = await admin
     .from("leads_in_flight")
-    .select("id, supplier_name, material_name, stage, status, source, confidence_score, payload, created_at")
+    .select(
+      "id, org_id, supplier_name, supplier_id, material_name, material_id, stage, status, source, payload, drop_reason, confidence_score, agent_run_id, created_at, orgs(slug, name)"
+    )
     .eq("org_id", org.id)
     .eq("status", "active")
     .order("confidence_score", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);
   const leads = rows ?? [];
+
+  // Promote/Drop gating: the operator can act if they see all orgs or this org
+  // is in their assignment set, and they hold an acting role.
+  const session = (await getSession())!;
+  const assigned = await getAssignedOrgIds(session);
+  const canAct =
+    hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]) &&
+    (seesAllOrgs(session) || (assigned?.includes(org.id) ?? false));
 
   // Existing saved quotes we already have for this org's materials (Ben's recco)
   // — context, not new leads. Tenkara is read-only + occasionally slow, so fall
@@ -50,39 +54,17 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
       </div>
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead>Supplier</TableHead>
-            <TableHead>Material</TableHead>
-            <TableHead>Stage</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead>Confidence</TableHead>
-            <TableHead>Found</TableHead>
-          </TableRow>
+          <LeadRichHeaders showOrg={false} />
         </TableHeader>
         <TableBody>
-          {leads.map((r: any) => {
-            const p = r.payload ?? {};
-            const conf = r.confidence_score != null ? `${Math.round(Number(r.confidence_score) * 100)}%` : "—";
-            const contact = p.supplier_contact_email || p.supplier_phone || p.contact_url || "—";
-            return (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.supplier_name ?? "—"}</TableCell>
-                <TableCell>{r.material_name ?? "—"}</TableCell>
-                <TableCell><Badge variant="secondary">{STAGE_LABEL[r.stage] ?? r.stage}</Badge></TableCell>
-                <TableCell className="text-xs text-muted-foreground truncate max-w-[26ch]" title={contact}>{contact}</TableCell>
-                <TableCell className="text-muted-foreground">{conf}</TableCell>
-                <TableCell className="text-muted-foreground">{relativeTime(r.created_at)}</TableCell>
-              </TableRow>
-            );
-          })}
+          {leads.map((r: any) => (
+            <LeadRichRow key={r.id} r={r} canAct={canAct} showOrg={false} />
+          ))}
           {leads.length === 0 && (
-            <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No active leads for this org.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={leadRichColSpan(false)} className="text-center py-8 text-muted-foreground">No active leads for this org.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
-      <Link href={`/work/review/leads?org=${org.slug}`} className="inline-block text-sm text-primary hover:underline">
-        Open in the full Review queue (filters, Promote/Drop) →
-      </Link>
 
       <section className="space-y-2 pt-2">
         <h2 className="text-sm uppercase tracking-wider text-muted-foreground font-medium">

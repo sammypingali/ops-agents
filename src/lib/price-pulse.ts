@@ -28,6 +28,13 @@ export interface PricePulseStat {
   max_unit_price: number;
   cheapest_supplier_id: string | null;
   cheapest_supplier_name: string | null;
+  // Marketplace/source link for the cheapest supplier's quote (may be null —
+  // only ~half of quotes carry a product_url).
+  cheapest_product_url: string | null;
+  // The client org that owns this material (materials.user_id → users →
+  // organizations). material_id is effectively per-client in Tenkara.
+  org_id: string | null;
+  org_name: string | null;
 }
 
 const MIN_QUOTES_DEFAULT = 3;
@@ -39,6 +46,7 @@ function pulseCte(orgFilter: string): string {
     with norm as (
       select mq.material_id,
              mq.supplier_id,
+             mq.product_url,
              lower(coalesce(nullif(trim(mq.unit_of_measurement), ''), '?')) as unit,
              (mq.price / nullif(mq.case_size, 0))::double precision as unit_price
         from public.material_quotes mq
@@ -99,7 +107,8 @@ export async function getPricePulse(opts?: {
     ),
     cheapest as (
       select distinct on (f.material_id, f.unit)
-             f.material_id, f.unit, f.supplier_id as cheapest_supplier_id
+             f.material_id, f.unit, f.supplier_id as cheapest_supplier_id,
+             f.product_url as cheapest_product_url
         from filt f
        order by f.material_id, f.unit, f.unit_price asc
     )
@@ -112,12 +121,17 @@ export async function getPricePulse(opts?: {
            round(a.avg_unit_price::numeric, 6)::double precision as avg_unit_price,
            round(a.max_unit_price::numeric, 6)::double precision as max_unit_price,
            c.cheapest_supplier_id,
-           s.name as cheapest_supplier_name
+           s.name as cheapest_supplier_name,
+           c.cheapest_product_url,
+           o.id as org_id,
+           o.name as org_name
       from agg a
       join public.materials m on m.id = a.material_id
+      left join public.users mu on mu.id = m.user_id
+      left join public.organizations o on o.id = mu.organization_id
       left join cheapest c on c.material_id = a.material_id and c.unit = a.unit
       left join public.suppliers s on s.id = c.cheapest_supplier_id
-     order by a.n_quotes desc
+     order by o.name nulls last, m.name, a.unit, a.n_quotes desc
      limit $${limitIdx}
     `,
     params

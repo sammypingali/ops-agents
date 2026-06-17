@@ -1,0 +1,203 @@
+import { TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { relativeTime } from "@/lib/utils";
+import { LeadRowActions } from "@/components/lead-row-actions";
+
+// Shared rich-lead rendering used by both the cross-org Review queue
+// (/work/review/leads) and the per-client Leads tab. Keeping a single
+// component means the scraped/discovery fields (source URLs, citations,
+// site-type, pricing, signal, completeness, catalog drift) can't drift
+// between the two surfaces.
+
+export function ConfidenceBadge({ value }: { value: number | null }) {
+  if (value == null) return <span className="text-muted-foreground">—</span>;
+  const pct = `${(value * 100).toFixed(0)}%`;
+  if (value >= 0.85) return <Badge variant="success">{pct}</Badge>;
+  if (value >= 0.65) return <Badge variant="default">{pct}</Badge>;
+  return <Badge variant="secondary">{pct}</Badge>;
+}
+
+export function LeadRichHeaders({ showOrg = true }: { showOrg?: boolean }) {
+  return (
+    <TableRow>
+      <TableHead>Supplier</TableHead>
+      <TableHead>Material</TableHead>
+      <TableHead>Pricing / MOQ</TableHead>
+      <TableHead>Signal</TableHead>
+      <TableHead>Confidence</TableHead>
+      <TableHead>Source</TableHead>
+      {showOrg && <TableHead>Org</TableHead>}
+      <TableHead>Staged</TableHead>
+      <TableHead>Run</TableHead>
+      <TableHead className="text-right">Action</TableHead>
+    </TableRow>
+  );
+}
+
+// Column count for empty-state colSpan. Matches LeadRichHeaders.
+export function leadRichColSpan(showOrg = true): number {
+  return showOrg ? 10 : 9;
+}
+
+export function LeadRichRow({
+  r,
+  canAct,
+  showOrg = true,
+}: {
+  r: any;
+  canAct: boolean;
+  showOrg?: boolean;
+}) {
+  const signal = r.payload?.signal as string | undefined;
+  const signalCount = r.payload?.signal_count as number | undefined;
+  const conf = r.confidence_score != null ? Number(r.confidence_score) : null;
+  const isScout = r.source === "ai_discovery";
+  const sourceUrl = (r.payload?.source_url ?? r.payload?.supplier_website) as string | undefined;
+  const siteType = r.payload?.site_type as "M" | "MS" | "N" | undefined;
+  const pricing = r.payload?.pack_sizes_pricing as string | undefined;
+  const moq = r.payload?.moq as string | undefined;
+  const completeness = r.payload?.completeness_score != null ? Number(r.payload.completeness_score) : null;
+  const citations = Array.isArray(r.payload?.source_citations) ? r.payload.source_citations : [];
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium align-top">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span>{r.supplier_name ?? "—"}</span>
+          {siteType && (
+            <span
+              className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+              title={
+                siteType === "M"
+                  ? "Marketplace — online checkout, no signup"
+                  : siteType === "MS"
+                  ? "Marketplace — checkout after registration"
+                  : "Non-marketplace — quote/RFQ only"
+              }
+            >
+              {siteType}
+            </span>
+          )}
+        </div>
+        {(r.payload?.supplier_country || r.payload?.supplier_role) && (
+          <div className="text-xs text-muted-foreground">
+            {[r.payload?.supplier_role, r.payload?.supplier_country].filter(Boolean).join(" · ")}
+          </div>
+        )}
+        {sourceUrl && (
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-xs text-primary hover:underline truncate max-w-[28ch]"
+            title={sourceUrl}
+          >
+            {sourceUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
+          </a>
+        )}
+        {citations.length > 1 && (
+          <details className="text-xs text-muted-foreground mt-0.5">
+            <summary className="cursor-pointer hover:text-foreground">{citations.length} sources</summary>
+            <ul className="mt-1 space-y-0.5 max-w-[40ch]">
+              {citations.slice(0, 6).map((u: string, i: number) => (
+                <li key={i} className="truncate">
+                  <a href={u} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    {u.replace(/^https?:\/\//, "").slice(0, 50)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </TableCell>
+      <TableCell className="align-top">
+        <div className="flex items-center gap-2">
+          <span>{r.material_name ?? "—"}</span>
+          {r.payload?.catalog_drift === "no_longer_listed" && (
+            <span
+              className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+              title="Agent 05 detected the supplier dropped this material from their catalog."
+            >
+              drift
+            </span>
+          )}
+        </div>
+        {r.payload?.inci_name && (
+          <div className="text-xs text-muted-foreground truncate max-w-[28ch]">{r.payload.inci_name}</div>
+        )}
+        {isScout && (
+          <span
+            className="mt-1 inline-flex items-center rounded-full bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            title="Discovered by Agent 03 via web search. Verify the supplier and pricing before promoting."
+          >
+            Scout discovery — needs verification
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="align-top text-xs max-w-[26ch]">
+        {pricing ? <span className="text-foreground">{pricing}</span> : <span className="text-muted-foreground">—</span>}
+        {moq && <div className="text-muted-foreground mt-0.5">MOQ: {moq}</div>}
+      </TableCell>
+      <TableCell className="text-muted-foreground text-xs align-top">
+        {signal ? (
+          <>
+            <code>{signal}</code>
+            {signalCount != null && <span className="ml-1">×{signalCount}</span>}
+          </>
+        ) : isScout ? (
+          <code className="text-yellow-700 dark:text-yellow-400">scout</code>
+        ) : (
+          "—"
+        )}
+      </TableCell>
+      <TableCell className="align-top">
+        <ConfidenceBadge value={conf} />
+        {completeness != null && (
+          <div
+            className="text-[10px] text-muted-foreground mt-0.5"
+            title="Share of RFQ fields the scanner captured (pricing, contact, MOQ, grades, certs, HQ)"
+          >
+            {Math.round(completeness * 100)}% ready
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="text-muted-foreground align-top">{r.source ?? "—"}</TableCell>
+      {showOrg && (
+        <TableCell className="text-muted-foreground">
+          {r.orgs?.name ?? <span className="italic text-xs">cross-org</span>}
+        </TableCell>
+      )}
+      <TableCell className="text-muted-foreground">{relativeTime(r.created_at)}</TableCell>
+      <TableCell>
+        {r.agent_run_id ? (
+          <a
+            href={`/agents/runs/${r.agent_run_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-primary hover:bg-muted"
+            title="Open the agent run that created this lead (new tab)"
+          >
+            run ↗
+          </a>
+        ) : (
+          "—"
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        {r.status === "active" ? (
+          <LeadRowActions
+            leadId={r.id}
+            stage={r.stage}
+            status={r.status}
+            hasBlockedReason={!!r.payload?.enrichment_blocked_reason}
+            disabled={!canAct}
+          />
+        ) : (
+          <span className="text-xs text-muted-foreground" title={r.drop_reason ?? undefined}>
+            {r.status}
+          </span>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}

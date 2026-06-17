@@ -30,8 +30,10 @@ export default async function PricePulsePage({
         <h1 className="font-serif text-3xl tracking-tight">Price Pulse</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
           Live market spread per material across all suppliers in the Tenkara corpus — min / average / max per-unit
-          price. Quotes fill from the marketplace and from scanned supplier replies. Sample quotes and unit-mislabeled
-          outliers are excluded; materials with at least {minQuotes} quotes are shown. Read-only.
+          price. Grouped by owning client, then material and unit (different units for the same material are not
+          directly comparable). Quotes fill from the marketplace and from scanned supplier replies; where a quote has a
+          marketplace listing, the cheapest supplier links out to it. Sample quotes and unit-mislabeled outliers are
+          excluded; materials with at least {minQuotes} quotes are shown. Read-only.
         </p>
       </div>
 
@@ -55,6 +57,7 @@ export default async function PricePulsePage({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Client</TableHead>
             <TableHead>Material</TableHead>
             <TableHead>Unit</TableHead>
             <TableHead className="text-right">Min</TableHead>
@@ -68,13 +71,14 @@ export default async function PricePulsePage({
         <TableBody>
           {pulse.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+              <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                 No materials meet the threshold.
               </TableCell>
             </TableRow>
           )}
           {pulse.map((p) => (
             <TableRow key={`${p.material_id}-${p.unit}`}>
+              <TableCell className="text-sm text-muted-foreground">{p.org_name ?? "—"}</TableCell>
               <TableCell className="font-medium">{p.material_name}</TableCell>
               <TableCell className="text-muted-foreground">{p.unit}</TableCell>
               <TableCell className="text-right tabular-nums">{money(p.min_unit_price)}</TableCell>
@@ -82,7 +86,24 @@ export default async function PricePulsePage({
               <TableCell className="text-right tabular-nums">{money(p.max_unit_price)}</TableCell>
               <TableCell className="text-right tabular-nums text-muted-foreground">{p.n_quotes}</TableCell>
               <TableCell className="text-right tabular-nums text-muted-foreground">{p.n_suppliers}</TableCell>
-              <TableCell className="text-sm">{p.cheapest_supplier_name ?? "—"}</TableCell>
+              <TableCell className="text-sm">
+                {p.cheapest_supplier_name ? (
+                  p.cheapest_product_url ? (
+                    <a
+                      href={p.cheapest_product_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      {p.cheapest_supplier_name} ↗
+                    </a>
+                  ) : (
+                    p.cheapest_supplier_name
+                  )
+                ) : (
+                  "—"
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
