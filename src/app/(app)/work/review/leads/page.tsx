@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { getAssignedOrgIds, seesAllOrgs } from "@/lib/org-access";
 import { LeadRichRow, LeadRichHeaders, leadRichColSpan } from "@/components/lead-rich-row";
+import { resolveMaterialGrades } from "@/lib/tenkara-names";
 import { LeadsExportCsvButton } from "@/components/leads-export-csv-button";
 import { LeadsFilterBar } from "@/components/leads-filter-bar";
 import { PaginationBar } from "@/components/pagination-bar";
@@ -131,6 +132,18 @@ export default async function LeadsPage({
   const canAct = seesAllOrgs(session) || (assigned !== null && assigned.length > 0);
   const rowCount = rows?.length ?? 0;
 
+  // Grade lives on the Tenkara material — resolve by material_id and attach.
+  let leadGrades = new Map<string, string>();
+  try {
+    leadGrades = await resolveMaterialGrades((rows ?? []).map((r: any) => r.material_id).filter(Boolean));
+  } catch {
+    // Tenkara unreachable — fall back to payload grade in the row component.
+  }
+  const leadRows = (rows ?? []).map((r: any) => ({
+    ...r,
+    grade: r.material_id ? leadGrades.get(r.material_id) ?? null : null,
+  }));
+
   const baseFilters = {
     stage,
     ...(driftOnly ? { drift: "1" } : {}),
@@ -225,7 +238,7 @@ export default async function LeadsPage({
           <LeadRichHeaders />
         </TableHeader>
         <TableBody>
-          {(rows ?? []).map((r: any) => (
+          {leadRows.map((r: any) => (
             <LeadRichRow key={r.id} r={r} canAct={canAct} />
           ))}
           {rowCount === 0 && (

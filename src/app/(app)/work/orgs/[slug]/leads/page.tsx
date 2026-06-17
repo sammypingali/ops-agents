@@ -7,6 +7,7 @@ import { getSession, hasAnyRole } from "@/lib/auth";
 import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
 import { LeadsExportCsvButton } from "@/components/leads-export-csv-button";
 import { LeadRichRow, LeadRichHeaders, leadRichColSpan } from "@/components/lead-rich-row";
+import { resolveMaterialGrades } from "@/lib/tenkara-names";
 import { existingQuotesForOrg, type ExistingQuote } from "@/agents-runtime/agents/lead-creator/sql";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,16 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
     .order("confidence_score", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);
-  const leads = rows ?? [];
+  let leads = (rows ?? []) as any[];
+
+  // Grade lives on the Tenkara material — resolve by material_id and attach.
+  let leadGrades = new Map<string, string>();
+  try {
+    leadGrades = await resolveMaterialGrades(leads.map((r) => r.material_id).filter(Boolean));
+  } catch {
+    // Tenkara unreachable — fall back to payload grade in the row component.
+  }
+  leads = leads.map((r) => ({ ...r, grade: r.material_id ? leadGrades.get(r.material_id) ?? null : null }));
 
   // Promote/Drop gating: the operator can act if they see all orgs or this org
   // is in their assignment set, and they hold an acting role.
