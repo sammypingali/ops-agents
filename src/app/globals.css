@@ -79,4 +79,17 @@
   body[data-printing] .no-print * {
     display: none !important;
   }
+  /* Fit the report to A4 and keep cards from splitting across page breaks. */
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body[data-printing] .print-report,
+  body[data-printing] .print-custom {
+    max-width: 100% !important;
+  }
+  body[data-printing] .report-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

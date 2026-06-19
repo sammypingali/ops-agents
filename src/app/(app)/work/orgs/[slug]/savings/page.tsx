@@ -5,6 +5,7 @@ import { getSession, hasAnyRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { buildSavingsReport } from "@/lib/savings-report";
 import { buildSourcingScorecard } from "@/lib/sourcing-scorecard";
+import { loadMaterialAttributes } from "@/lib/material-attributes";
 import { SavingsReportInteractive } from "@/components/savings-report-interactive";
 import { SavingsWorksheet } from "@/components/savings-worksheet";
 import { cn } from "@/lib/utils";
@@ -16,11 +17,13 @@ export default async function OrgSavingsPage({
   searchParams,
 }: {
   params: { slug: string };
-  searchParams?: { view?: string };
+  searchParams?: { view?: string; type?: string };
 }) {
   const session = (await getSession())!;
   if (!hasAnyRole(session, ["admin", "ops_lead", "ops_operator", "monitor"])) redirect("/work");
   const view = searchParams?.view === "report" ? "report" : "table";
+  const reportType = searchParams?.type === "freight" ? "freight" : "savings";
+  const canEdit = hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
 
   const admin = createAdminClient();
   const { data: org } = await admin
@@ -43,10 +46,22 @@ export default async function OrgSavingsPage({
   const scorecard = await buildSourcingScorecard(admin, org.id, org.tenkara_org_id);
 
   if (view === "report") {
+    const attributes = reportType === "freight" ? await loadMaterialAttributes(org.id) : undefined;
     return (
       <div className="space-y-6">
-        <ViewToggle slug={org.slug} view={view} />
-        <SavingsReportInteractive report={report} clientName={org.name} slug={org.slug} />
+        <div className="flex flex-wrap items-center gap-3">
+          <ViewToggle slug={org.slug} view={view} />
+          <ReportTypeToggle slug={org.slug} type={reportType} />
+        </div>
+        <SavingsReportInteractive
+          report={report}
+          clientName={org.name}
+          slug={org.slug}
+          variant={reportType}
+          attributes={attributes}
+          orgId={org.id}
+          canEdit={canEdit}
+        />
       </div>
     );
   }
@@ -76,6 +91,27 @@ function ViewToggle({ slug, view }: { slug: string; view: "table" | "report" }) 
     <div className="inline-flex rounded-lg border bg-muted/40 p-1 print:hidden">
       {tab("table", "Worksheet", base)}
       {tab("report", "Savings report", `${base}?view=report`)}
+    </div>
+  );
+}
+
+function ReportTypeToggle({ slug, type }: { slug: string; type: "savings" | "freight" }) {
+  const base = `/work/orgs/${slug}/savings?view=report`;
+  const tab = (key: "savings" | "freight", label: string, href: string) => (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        type === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {label}
+    </Link>
+  );
+  return (
+    <div className="inline-flex rounded-lg border bg-muted/40 p-1 print:hidden">
+      {tab("savings", "Cost savings", base)}
+      {tab("freight", "Freight & suppliers", `${base}&type=freight`)}
     </div>
   );
 }

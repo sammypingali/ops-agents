@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { SavingsReport } from "@/lib/savings-report";
+import type { MaterialAttributes } from "@/lib/material-attributes";
 import { SavingsReportView } from "@/components/savings-report-view";
 import { Button } from "@/components/ui/button";
 
@@ -13,10 +14,18 @@ export function SavingsReportInteractive({
   report,
   clientName,
   slug,
+  variant = "savings",
+  attributes,
+  orgId,
+  canEdit = false,
 }: {
   report: SavingsReport;
   clientName: string;
   slug: string;
+  variant?: "savings" | "freight";
+  attributes?: Record<string, MaterialAttributes>;
+  orgId?: string;
+  canEdit?: boolean;
 }) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -96,7 +105,15 @@ export function SavingsReportInteractive({
         </div>
       </div>
 
-      <SavingsReportView report={shaped} clientName={clientName} subtitle={subtitle} />
+      <SavingsReportView
+        report={shaped}
+        clientName={clientName}
+        subtitle={subtitle}
+        variant={variant}
+        attributes={attributes}
+        orgId={orgId}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

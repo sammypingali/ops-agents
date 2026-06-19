@@ -1,5 +1,8 @@
 import type { SavingsReport } from "@/lib/savings-report";
+import type { MaterialAttributes } from "@/lib/material-attributes";
+import { attrKey } from "@/lib/material-attributes";
 import { PrintReportButton } from "@/components/print-report-button";
+import { FreightDetail } from "@/components/freight-detail";
 
 // Branded, client-facing Savings Report (ops template v2 — "Cost Savings" type).
 // Mirrors the B&R / NutriScience Canva layout: per-material card with the
@@ -27,10 +30,18 @@ export function SavingsReportView({
   report,
   clientName,
   subtitle,
+  variant = "savings",
+  attributes,
+  orgId,
+  canEdit = false,
 }: {
   report: SavingsReport;
   clientName: string;
   subtitle?: string | null;
+  variant?: "savings" | "freight";
+  attributes?: Record<string, MaterialAttributes>;
+  orgId?: string;
+  canEdit?: boolean;
 }) {
   const lines = report.lines;
   const withSavings = lines.filter((l) => l.savings_per_unit > 0);
@@ -67,7 +78,7 @@ export function SavingsReportView({
         {lines.map((l) => {
           const hasSaving = l.savings_per_unit > 0;
           return (
-            <div key={`${l.material_id}-${l.unit}`} className="rounded-xl border overflow-hidden">
+            <div key={`${l.material_id}-${l.unit}`} className="report-card rounded-xl border overflow-hidden">
               <div className="flex items-center justify-between gap-4 bg-muted/40 px-5 py-3">
                 <div className="font-semibold">
                   {l.material_name}
@@ -104,6 +115,16 @@ export function SavingsReportView({
                 <span className="font-medium text-foreground">Market:</span> avg {money(l.market_avg_unit_price)}/{l.unit} ·{" "}
                 {l.n_quotes} quotes from {l.n_suppliers} suppliers
               </div>
+
+              {variant === "freight" && orgId && (
+                <FreightDetail
+                  orgId={orgId}
+                  materialId={l.material_id}
+                  unit={l.unit}
+                  attrs={attributes?.[attrKey(l.material_id, l.unit)] ?? null}
+                  canEdit={canEdit}
+                />
+              )}
             </div>
           );
         })}
