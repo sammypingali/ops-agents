@@ -6,7 +6,7 @@ import { generateRevalidationEmail, formatUserMessage } from "./drafter";
 import { buildCsv, type GroupResult } from "./csv-builder";
 import { uploadCsvAndSign } from "@/lib/storage";
 import { createMissiveDraft, missiveDraftLink } from "@/lib/missive";
-import { createTenkaraConversation, coldOutboundEmailClient } from "@/lib/tenkara";
+import { createTenkaraConversation, coldOutboundEmailClient, tenkaraEmailAccountIdFor } from "@/lib/tenkara";
 import { bodyToHtml } from "@/lib/email-style";
 import { lintDraft } from "../outreach-qa/lint";
 import { postQrSummary } from "./slack-notifier";
@@ -220,12 +220,25 @@ registerAgent({
       let conversationIdValue: string;
       try {
         if (emailClient === "rod_app") {
+          const emailAccountId = tenkaraEmailAccountIdFor({
+            mode: group.mode as "active" | "ghost",
+            clientOrgName: group.client_org_name,
+            ghostBrand: group.ghostBrand,
+          });
+          if (!emailAccountId) {
+            await ctx.log(`No Tenkara inbox mapped for brand "${group.mode === "ghost" ? group.ghostBrand : group.client_org_name}" — staging without a sender; operator must pick`, {
+              level: "warn",
+              step: "stage",
+              data: { client: group.client_org_name, mode: group.mode, ghost_brand: group.ghostBrand ?? null },
+            });
+          }
           const c = await createTenkaraConversation({
             externalId: `agent-02-reval-${group.client_org_id}-${group.supplier_id}-${today}`,
             to: { name: group.supplier_contact_name ?? "", address: group.supplier_contact_email },
             subject: draft.subject,
             bodyHtml: bodyToHtml(draft.body),
             bodyText: draft.body,
+            emailAccountId,
             context: { agent: "02 Quote Revalidation", client_org_id: group.client_org_id, supplier_id: group.supplier_id },
           });
           draftIdValue = c.draftId;

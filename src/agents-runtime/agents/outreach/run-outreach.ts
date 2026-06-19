@@ -1,7 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { composeOutreachDraft } from "./drafter";
 import { stageDraft } from "@/lib/draft-staging";
-import { coldOutboundEmailClient } from "@/lib/tenkara";
+import { coldOutboundEmailClient, tenkaraEmailAccountIdFor } from "@/lib/tenkara";
 
 // Per-lead outreach: compose the email, stage it through the shared draft→QA
 // pipeline, and promote the lead to ready_for_outreach. Shared by Agent 04's
@@ -56,6 +56,13 @@ export async function runOutreachForLead(input: RunOutreachInput): Promise<RunOu
   });
 
   const emailClient = coldOutboundEmailClient("04");
+  const emailAccountId = emailClient === "rod_app" ? tenkaraEmailAccountIdFor({ mode, clientOrgName, ghostBrand }) : undefined;
+  if (emailClient === "rod_app" && !emailAccountId) {
+    await log(`No Tenkara inbox mapped for brand "${mode === "ghost" ? ghostBrand : clientOrgName}" — staging without a sender; operator must pick`, {
+      step: "outreach",
+      data: { lead_id: lead.id, mode, ghost_brand: ghostBrand ?? null },
+    });
+  }
   const staged = await stageDraft({
     admin,
     agentId,
@@ -68,6 +75,7 @@ export async function runOutreachForLead(input: RunOutreachInput): Promise<RunOu
     body: draft.body,
     assignedOperator,
     emailClient,
+    emailAccountId,
     externalId: emailClient === "rod_app" ? `agent-04-outreach-${lead.id}` : undefined,
     metadata: {
       outreach_mode: mode,

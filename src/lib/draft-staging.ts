@@ -35,6 +35,9 @@ export interface StageDraftInput {
   // OR externalId to create a brand-new cold-outbound conversation. One is required.
   conversationId?: string | null;
   externalId?: string | null; // idempotency key for cold-outbound conversation creates
+  // For emailClient="rod_app" cold outbound: the Tenkara inbox UUID to send from
+  // (resolved by the caller from the sending brand). Omit → operator picks at review.
+  emailAccountId?: string | null;
   // Caller-supplied metadata (outreach_mode, ghost_brand, lead_id, etc.).
   // qa_findings + the draft link are merged in here.
   metadata?: Record<string, any>;
@@ -89,6 +92,7 @@ export async function stageDraft(input: StageDraftInput): Promise<StageDraftResu
           subject,
           bodyHtml: bodyToHtml(body),
           bodyText: body,
+          emailAccountId: input.emailAccountId ?? undefined,
           context: { org_id: orgId, supplier_id: supplierId ?? null, material_id: materialId ?? null, quote_id: quoteId ?? null, ...callerMeta },
         });
         draftId = c.draftId;

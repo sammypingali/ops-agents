@@ -147,6 +147,49 @@ export async function createTenkaraConversation(input: CreateTenkaraConversation
   };
 }
 
+// Per-client Tenkara Inbox account UUIDs (from Rod, 2026-06-18). Conversations
+// MUST be created with an email_account_id — a null account makes the thread
+// invisible on Tenkara's side (placement is driven by the account label). The
+// account is keyed by the EFFECTIVE SENDING BRAND, not the underlying client:
+// ghost outreach goes out under the ghostBrand (Bobber Labs / Rove Essentials),
+// so it lands in that brand's inbox. Keys are normalized (lowercased, single-
+// spaced); aliases cover the differing spellings between organizations.name and
+// the Tenkara teamspace label.
+const TENKARA_EMAIL_ACCOUNT_IDS: Record<string, string> = {
+  "bobber labs": "425a6757-c1a6-4281-88d3-acd3cb851d12",
+  "nutripro": "a42625c6-55b7-4dc5-94e8-dca567dca8fc",
+  "nutripro group": "a42625c6-55b7-4dc5-94e8-dca567dca8fc",
+  "pharmalab": "80a63de7-13c8-489b-98d8-535ccf09efc3",
+  "pharmalab enterprises": "80a63de7-13c8-489b-98d8-535ccf09efc3",
+  "rove essentials": "d350fc1e-984d-4efd-9332-b20f8d7f66e2",
+  "vita organica": "294ba3df-a368-4e5d-8508-099267ca9665",
+  "operations": "424f6dc3-8c78-4201-b5e3-69e242e34735",
+};
+
+function normalizeBrand(brand: string): string {
+  return brand.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Resolve an Inbox account UUID from a brand name. Returns undefined for brands
+// with no Tenkara teamspace (e.g. McGinley, Sphere, Ulo) — callers should omit
+// email_account_id and warn rather than guess a mailbox.
+export function resolveTenkaraEmailAccountId(brand: string | null | undefined): string | undefined {
+  if (!brand) return undefined;
+  return TENKARA_EMAIL_ACCOUNT_IDS[normalizeBrand(brand)];
+}
+
+// The mailbox a cold-outbound draft should send from, derived from the same
+// (mode, clientOrgName, ghostBrand) the drafter already uses. Ghost outreach
+// files under the ghostBrand inbox; active outreach under the client's own.
+export function tenkaraEmailAccountIdFor(input: {
+  mode: "active" | "ghost";
+  clientOrgName?: string | null;
+  ghostBrand?: string | null;
+}): string | undefined {
+  const brand = input.mode === "ghost" ? input.ghostBrand : input.clientOrgName;
+  return resolveTenkaraEmailAccountId(brand);
+}
+
 // Rollout flag: which email app a cold-outbound agent stages into. Defaults to
 // Missive. Set COLD_OUTBOUND_TENKARA_AGENTS to "all" (or a csv like "04" /
 // "02,04") to route those agents to Tenkara. Lets us flip per-deploy — and
