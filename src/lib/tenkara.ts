@@ -93,6 +93,20 @@ export async function createTenkaraDraft(input: CreateTenkaraDraftInput): Promis
 // token's `conversations:write` scope. Never sends — operator picks the sender
 // and clicks Send in Tenkara's Pending Outreach surface.
 
+// The supplier contact card Tenkara writes to the supplier record on create
+// (created if new, updated if the email already exists). `email` is the match
+// key; omitted sub-fields take Tenkara's defaults (tz America/New_York, work
+// 09:00–17:00, work_days Mon–Fri), so we only send what we actually know.
+export interface TenkaraSupplierContact {
+  email?: string;                     // match key; defaults to the recipient address
+  name?: string | null;
+  company?: string | null;
+  timezone?: string;                  // IANA, e.g. America/New_York
+  work_start?: string;                // "HH:MM"
+  work_end?: string;                  // "HH:MM"
+  work_days?: number[];               // 0=Sun … 6=Sat
+}
+
 export interface CreateTenkaraConversationInput {
   externalId: string;                 // idempotency key, ≤200 chars, stable per intended create
   to: { name?: string | null; address: string };
@@ -100,6 +114,7 @@ export interface CreateTenkaraConversationInput {
   bodyHtml: string;
   bodyText?: string;
   emailAccountId?: string;            // optional sender; omit → operator picks at review
+  supplierContact?: TenkaraSupplierContact; // written to the supplier record
   context?: Record<string, any>;      // free-form; forwarded verbatim on the conversation.agent_created webhook
 }
 
@@ -125,6 +140,17 @@ export async function createTenkaraConversation(input: CreateTenkaraConversation
   if (input.to.name) payload.to_name = input.to.name;
   if (input.bodyText) payload.body_text = input.bodyText;
   if (input.emailAccountId) payload.email_account_id = input.emailAccountId;
+  if (input.supplierContact) {
+    const sc = input.supplierContact;
+    const contact: Record<string, unknown> = { email: (sc.email ?? input.to.address).toLowerCase() };
+    if (sc.name != null) contact.name = sc.name;
+    if (sc.company != null) contact.company = sc.company;
+    if (sc.timezone) contact.timezone = sc.timezone;
+    if (sc.work_start) contact.work_start = sc.work_start;
+    if (sc.work_end) contact.work_end = sc.work_end;
+    if (sc.work_days) contact.work_days = sc.work_days;
+    payload.supplier_contact = contact;
+  }
   if (input.context) payload.context = input.context;
 
   const res = await fetch(`${TENKARA_INBOX_BASE}/api/external/conversations`, {

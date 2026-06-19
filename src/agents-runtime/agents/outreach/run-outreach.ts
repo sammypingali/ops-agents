@@ -76,6 +76,7 @@ export async function runOutreachForLead(input: RunOutreachInput): Promise<RunOu
     assignedOperator,
     emailClient,
     emailAccountId,
+    supplierCompany: lead.supplier_name,
     externalId: emailClient === "rod_app" ? `agent-04-outreach-${lead.id}` : undefined,
     metadata: {
       outreach_mode: mode,

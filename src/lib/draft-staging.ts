@@ -38,6 +38,9 @@ export interface StageDraftInput {
   // For emailClient="rod_app" cold outbound: the Tenkara inbox UUID to send from
   // (resolved by the caller from the sending brand). Omit → operator picks at review.
   emailAccountId?: string | null;
+  // For emailClient="rod_app" cold outbound: supplier contact card written to the
+  // supplier record. Email defaults to the recipient; omitted fields take defaults.
+  supplierCompany?: string | null;
   // Caller-supplied metadata (outreach_mode, ghost_brand, lead_id, etc.).
   // qa_findings + the draft link are merged in here.
   metadata?: Record<string, any>;
@@ -93,6 +96,7 @@ export async function stageDraft(input: StageDraftInput): Promise<StageDraftResu
           bodyHtml: bodyToHtml(body),
           bodyText: body,
           emailAccountId: input.emailAccountId ?? undefined,
+          supplierContact: { email: to.address, name: to.name ?? null, company: input.supplierCompany ?? null },
           context: { org_id: orgId, supplier_id: supplierId ?? null, material_id: materialId ?? null, quote_id: quoteId ?? null, ...callerMeta },
         });
         draftId = c.draftId;

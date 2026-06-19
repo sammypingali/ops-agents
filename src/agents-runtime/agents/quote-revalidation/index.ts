@@ -239,6 +239,11 @@ registerAgent({
             bodyHtml: bodyToHtml(draft.body),
             bodyText: draft.body,
             emailAccountId,
+            supplierContact: {
+              email: group.supplier_contact_email,
+              name: group.supplier_contact_name ?? null,
+              company: group.supplier_name ?? null,
+            },
             context: { agent: "02 Quote Revalidation", client_org_id: group.client_org_id, supplier_id: group.supplier_id },
           });
           draftIdValue = c.draftId;
