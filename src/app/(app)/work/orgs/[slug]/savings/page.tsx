@@ -36,8 +36,8 @@ export default async function OrgSavingsPage({
   if (!org.tenkara_org_id) {
     return (
       <p className="text-sm text-muted-foreground">
-        This org isn&apos;t linked to a Tenkara organization yet, so there are no quotes to compare. Set{" "}
-        <code className="text-xs">tenkara_org_id</code> on the org to enable savings.
+        This client isn&apos;t linked to a Tenkara organization yet, so there are no quotes to compare. An admin can
+        link it in the client&apos;s settings to enable savings.
       </p>
     );
   }

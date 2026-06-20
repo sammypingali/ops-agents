@@ -80,9 +80,9 @@ export default async function OrgQuotesPage({
       {staged.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4">
           {error ? (
-            <span className="text-destructive">Query failed: {error.message}</span>
+            <span className="text-destructive">Couldn&apos;t load quotes right now — try refreshing in a moment.</span>
           ) : status === "pending_review" ? (
-            "No staged quotes yet. The Email Scanner populates this when it finds prices in this client's supplier replies."
+            "No staged quotes yet. These appear automatically when prices are found in this client's supplier replies."
           ) : (
             `No ${status.replace("_", " ")} staged quotes.`
           )}
