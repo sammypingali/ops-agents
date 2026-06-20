@@ -4,6 +4,8 @@ import { getSession, hasAnyRole } from "@/lib/auth";
 import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
 import { STAGED_CONF_ORDER } from "@/components/staged-quote-row";
 import { StagedQuotesList } from "@/components/staged-quotes-list";
+import { TemplateDownloadButton } from "@/components/template-download-button";
+import { QUOTE_TEMPLATE_HEADERS, SUPPLIER_TEMPLATE_HEADERS } from "@/lib/tenkara-templates";
 import { resolveMaterialGrades } from "@/lib/tenkara-names";
 
 export const dynamic = "force-dynamic";
@@ -55,10 +57,19 @@ export default async function OrgQuotesPage({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground max-w-2xl">
-        Supplier prices the Email Scanner extracted from reply bodies and attachments for {org.name}. Edit to fix an
-        extraction, approve to queue for the next CSV export — staged quotes never write back to Tenkara automatically.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Supplier prices extracted from this client&apos;s supplier replies. Edit to fix an extraction, approve to queue
+          for the next CSV export — staged quotes never write back to Tenkara automatically.
+        </p>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Tenkara upload templates</span>
+          <div className="flex gap-1">
+            <TemplateDownloadButton headers={QUOTE_TEMPLATE_HEADERS} filename="tenkara-quotes-template.csv" label="Quotes" />
+            <TemplateDownloadButton headers={SUPPLIER_TEMPLATE_HEADERS} filename="tenkara-suppliers-template.csv" label="Suppliers" />
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {STATUSES.map((s) => (
