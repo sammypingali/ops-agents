@@ -20,7 +20,7 @@ export interface RecheckInput {
 }
 
 export interface RecheckResult {
-  classification: "current_price_found" | "link_broken" | "needs_review";
+  classification: "current_price_found" | "link_broken" | "needs_review" | "login_required";
   current_price: number | null;
   pack_size: string | null;            // free-text e.g. "50 lb"
   source_url: string | null;
@@ -41,7 +41,7 @@ Return ONLY a JSON object (no prose) like:
 
 \`\`\`json
 {
-  "classification": "current_price_found | link_broken | needs_review",
+  "classification": "current_price_found | link_broken | needs_review | login_required",
   "current_price": 99.99,
   "pack_size": "50 lb",
   "source_url": "https://supplier.com/...",
@@ -51,12 +51,13 @@ Return ONLY a JSON object (no prose) like:
 \`\`\`
 
 Rules:
+- "login_required" when the price is hidden behind a sign-in / registration / "create an account" / "log in to see price" wall — i.e. it could be read by a human who signs up, but not publicly. Ops will sign up and pull it manually.
 - "link_broken" ONLY for hard 404 / product removed / redirect to category page.
-- "needs_review" for ambiguous cases: login wall, multiple SKUs on page, currency mismatch, price requires quote, page exists but pack size differs significantly.
+- "needs_review" for other ambiguous cases: multiple SKUs on page, currency mismatch, price requires a custom quote/RFQ, page exists but pack size differs significantly.
 - "current_price_found" only when you have a concrete numeric price for an equivalent pack size.
 - current_price must be a numeric USD value (or null). Strip currency symbols.
 - source_url must be the actual product page you read from, not a search result.
-- Never fabricate. If the price is not visible publicly, return needs_review with a note explaining why.`;
+- Never fabricate. If a public price isn't visible, return login_required (if it's behind a login) or needs_review, with a note explaining why.`;
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
@@ -117,9 +118,10 @@ export async function recheckMarketplaceQuote(input: RecheckInput): Promise<Rech
   }
 
   const cls = parsed.classification;
-  const validCls = cls === "current_price_found" || cls === "link_broken" || cls === "needs_review"
-    ? cls
-    : "needs_review";
+  const validCls =
+    cls === "current_price_found" || cls === "link_broken" || cls === "needs_review" || cls === "login_required"
+      ? cls
+      : "needs_review";
 
   let price: number | null = null;
   if (typeof parsed.current_price === "number" && Number.isFinite(parsed.current_price)) {

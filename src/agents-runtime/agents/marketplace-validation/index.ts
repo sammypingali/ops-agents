@@ -73,6 +73,7 @@ async function fetchExpiringMarketplaceQuotes(): Promise<QuoteRow[]> {
 }
 
 function classify(baseline: number | null, current: number | null, result: RecheckResult): string {
+  if (result.classification === "login_required") return "login_required";
   if (result.classification === "link_broken") return "link_broken";
   if (result.classification === "needs_review") return "needs_review";
   if (current == null) return "no_signal_found";
@@ -141,6 +142,7 @@ registerAgent({
       no_signal_found: 0,
       needs_review: 0,
       link_broken: 0,
+      login_required: 0,
     };
 
     for (const q of quotes) {
@@ -221,11 +223,12 @@ registerAgent({
 
     ctx.setItemsProcessed(written);
     ctx.setStatus("success");
-    const interesting = counts.signal_diverges + counts.link_broken + counts.needs_review;
+    const interesting = counts.signal_diverges + counts.link_broken + counts.needs_review + counts.login_required;
     ctx.setSummary(
       `Re-checked ${written} quotes (${interesting} need review) · ` +
         `${counts.signal_matches_baseline} unchanged · ${counts.signal_diverges} diverged · ` +
         `${counts.no_signal_found} no signal · ${counts.needs_review} needs review · ${counts.link_broken} link broken` +
+        (counts.login_required ? ` · ${counts.login_required} need manual login` : "") +
         (skippedPending ? ` · ${skippedPending} skipped (already pending)` : "")
     );
   },

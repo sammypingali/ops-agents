@@ -58,6 +58,12 @@ export function ClassificationBadge({ value }: { value: string | null }) {
       return <Badge variant="secondary">no signal</Badge>;
     case "link_broken":
       return <Badge variant="danger">link broken</Badge>;
+    case "login_required":
+      return (
+        <Badge variant="warn" title="Price is behind a marketplace sign-in/registration wall — ops needs to sign up and pull it manually.">
+          needs manual login
+        </Badge>
+      );
     case "needs_review":
       return <Badge variant="default">review</Badge>;
     default:
