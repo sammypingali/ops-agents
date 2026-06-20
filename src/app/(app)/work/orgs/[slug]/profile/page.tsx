@@ -2,8 +2,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { getSession, hasAnyRole } from "@/lib/auth";
 import { ClientProfilePanel, type ProfileValue, type SettingsValue, type UploadItem } from "@/components/client-profile-form";
+import { MaterialsPanel } from "@/components/materials-panel";
+import { PricingPipelineTable } from "@/components/pricing-pipeline-table";
+import { getMaterialProfile } from "@/lib/material-profile";
+import { loadPricingThreads } from "@/lib/pricing-pipeline";
 
 export const dynamic = "force-dynamic";
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="font-serif text-2xl tracking-tight">{children}</h2>;
+}
 
 export default async function ClientProfilePage({ params }: { params: { slug: string } }) {
   const session = (await getSession())!;
@@ -57,12 +65,47 @@ export default async function ClientProfilePage({ params }: { params: { slug: st
   const uploads = (uploadsRes.data ?? []) as UploadItem[];
   const canEdit = hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
 
+  // Comprehensive client tracker: profile, then this client's materials, then
+  // the live sourcing pipeline — one place to see who the client is, what they
+  // buy, and where each thread stands.
+  const [materialProfile, pipeline] = await Promise.all([
+    getMaterialProfile(org.id),
+    loadPricingThreads(admin, [org.id]),
+  ]);
+
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Agent 12 researches this client — combing the web plus its Tenkara data, your settings, and uploads — and summarizes a profile you can edit.
-      </p>
-      <ClientProfilePanel orgId={org.id} profile={profile} settings={settings} uploads={uploads} canEdit={canEdit} />
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Who this client is — researched from the web plus their Tenkara data, your settings, and uploads, and summarized
+          here for you to edit.
+        </p>
+        <ClientProfilePanel orgId={org.id} profile={profile} settings={settings} uploads={uploads} canEdit={canEdit} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <SectionTitle>Materials</SectionTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            What this client buys — order frequency, shelf-life, and quote expiry, with PO history.
+          </p>
+        </div>
+        <MaterialsPanel orgId={org.id} profile={materialProfile} canEdit={canEdit} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <SectionTitle>Sourcing pipeline</SectionTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Every supplier thread for this client, from outreach to a finalized price.
+          </p>
+        </div>
+        <PricingPipelineTable
+          data={pipeline}
+          emptyReason="No tracked threads yet. They appear here once outreach is staged for this client."
+          slug={org.slug}
+        />
+      </section>
     </div>
   );
 }
