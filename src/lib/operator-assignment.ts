@@ -39,31 +39,25 @@ export async function getOrgOperatorPool(
   admin: SupabaseClient,
   orgId: string
 ): Promise<OperatorRef[]> {
+  // Only people with the ops_operator role are assignable — not admins/leads/
+  // monitors. When no operators are assigned to an org, the pool is empty and
+  // suppliers stay unassigned (by design, until the ops team is added).
+  const isOperator = (u: any): boolean =>
+    Array.isArray(u?.user_roles) && u.user_roles.some((r: any) => r?.role === "ops_operator");
   const toRef = (u: any): OperatorRef | null =>
-    u && u.status !== "out_of_office" ? { id: u.id, name: u.display_name ?? u.email ?? "—", email: u.email ?? null } : null;
+    u && u.status !== "out_of_office" && isOperator(u)
+      ? { id: u.id, name: u.display_name ?? u.email ?? "—", email: u.email ?? null }
+      : null;
 
   // user_org_assignments has two FKs to users (user_id + assigned_by), so the
   // embed must name the relationship explicitly or PostgREST errors out.
   const { data: assigns } = await admin
     .from("user_org_assignments")
-    .select("users:users!user_org_assignments_user_id_fkey(id, display_name, email, status)")
+    .select("users:users!user_org_assignments_user_id_fkey(id, display_name, email, status, user_roles(role))")
     .eq("org_id", orgId);
-  let pool = (assigns ?? [])
+  const pool = (assigns ?? [])
     .map((a: any) => toRef(a.users))
     .filter((r: OperatorRef | null): r is OperatorRef => !!r);
-
-  if (pool.length === 0) {
-    const { data: def } = await admin
-      .from("org_default_operators")
-      .select("primary_user_id, backup_user_id")
-      .eq("org_id", orgId)
-      .maybeSingle();
-    const ids = [def?.primary_user_id, def?.backup_user_id].filter((x): x is string => !!x);
-    if (ids.length) {
-      const { data: users } = await admin.from("users").select("id, display_name, email, status").in("id", ids);
-      pool = (users ?? []).map(toRef).filter((r): r is OperatorRef => !!r);
-    }
-  }
 
   const seen = new Set<string>();
   return pool.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true))).sort((a, b) => a.id.localeCompare(b.id));

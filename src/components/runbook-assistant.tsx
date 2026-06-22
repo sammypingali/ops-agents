@@ -138,18 +138,23 @@ export function RunbookAssistant() {
                   </div>
                 </div>
               ) : (
-                messages.map((m, i) => (
-                  <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                    <div
-                      className={cn(
-                        "max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm",
-                        m.role === "user" ? "bg-accent text-accent-foreground" : "border border-border bg-background"
-                      )}
-                    >
-                      {m.content || (busy && i === messages.length - 1 ? "…" : "")}
+                messages.map((m, i) =>
+                  m.role === "user" ? (
+                    <div key={i} className="flex justify-end">
+                      <div className="max-w-[85%] whitespace-pre-wrap rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
+                        {m.content}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ) : (
+                    <div key={i} className="rounded-lg border border-border bg-background px-3.5 py-2.5">
+                      {m.content ? (
+                        <AssistantMarkdown text={m.content} />
+                      ) : (
+                        <span className="text-muted-foreground">{busy && i === messages.length - 1 ? "…" : ""}</span>
+                      )}
+                    </div>
+                  )
+                )
               )}
             </div>
 
@@ -180,6 +185,63 @@ export function RunbookAssistant() {
       )}
     </>
   );
+}
+
+// Minimal, dependency-free, XSS-safe markdown for assistant replies: renders
+// **bold**, `code`, headings, and bullet/numbered lists as React nodes (never
+// innerHTML). Enough to make the model's output readable.
+function inlineMd(text: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("**")) out.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
+    else out.push(<code key={k++} className="rounded bg-secondary px-1 py-0.5 text-[0.85em]">{tok.slice(1, -1)}</code>);
+    last = m.index + tok.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+function AssistantMarkdown({ text }: { text: string }) {
+  const blocks: React.ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+  let key = 0;
+  const flush = () => {
+    if (!list) return;
+    const items = list.items.map((it, i) => <li key={i}>{inlineMd(it)}</li>);
+    blocks.push(
+      list.ordered ? (
+        <ol key={key++} className="ml-4 list-decimal space-y-1">{items}</ol>
+      ) : (
+        <ul key={key++} className="ml-4 list-disc space-y-1">{items}</ul>
+      )
+    );
+    list = null;
+  };
+
+  for (const line of text.split(/\n/)) {
+    const ul = line.match(/^\s*[-*]\s+(.*)/);
+    const ol = line.match(/^\s*\d+\.\s+(.*)/);
+    const h = line.match(/^\s*(#{1,3})\s+(.*)/);
+    if (ul) {
+      if (!list || list.ordered) flush();
+      (list ??= { ordered: false, items: [] }).items.push(ul[1]);
+    } else if (ol) {
+      if (!list || !list.ordered) flush();
+      (list ??= { ordered: true, items: [] }).items.push(ol[1]);
+    } else {
+      flush();
+      if (h) blocks.push(<div key={key++} className="mt-2 font-semibold">{inlineMd(h[2])}</div>);
+      else if (line.trim()) blocks.push(<p key={key++}>{inlineMd(line)}</p>);
+    }
+  }
+  flush();
+  return <div className="space-y-2 text-sm leading-relaxed">{blocks}</div>;
 }
 
 function HelpGlyph({ className }: { className?: string }) {

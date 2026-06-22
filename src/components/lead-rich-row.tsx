@@ -71,6 +71,18 @@ export function leadRichColSpan(showOrg = true): number {
 // Marketplace vs direct (non-marketplace), derived from the scanner's site_type.
 // M = marketplace (no signup), MS = marketplace (after registration), N = direct
 // quote/RFQ only. Returns null when the lead isn't classified.
+// Turn the raw signal enum into a readable label (e.g. quoted_same_material →
+// "Quoted same material").
+const SIGNAL_LABELS: Record<string, string> = {
+  quoted_same_material: "Quoted same material",
+  catalog_match: "Catalog match",
+  same_material: "Same material",
+  prior_relationship: "Prior relationship",
+};
+export function humanizeSignal(signal: string): string {
+  return SIGNAL_LABELS[signal] ?? signal.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function leadMarketKind(siteType: string | null | undefined): "marketplace" | "direct" | null {
   if (siteType === "M" || siteType === "MS") return "marketplace";
   if (siteType === "N") return "direct";
@@ -167,14 +179,17 @@ export function LeadRichRow({
           </div>
         )}
       </TableCell>
-      <TableCell className="text-muted-foreground text-xs align-top">
+      <TableCell className="align-top">
         {signal ? (
-          <>
-            <code>{signal}</code>
-            {signalCount != null && <span className="ml-1">×{signalCount}</span>}
-          </>
+          <span
+            className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
+            title={`Why this supplier surfaced as a lead${signalCount != null ? ` — seen ${signalCount}×` : ""}`}
+          >
+            {humanizeSignal(signal)}
+            {signalCount != null && signalCount > 1 && <span className="ml-1 text-muted-foreground">×{signalCount}</span>}
+          </span>
         ) : (
-          "—"
+          <span className="text-muted-foreground text-xs">—</span>
         )}
       </TableCell>
       <TableCell className="align-top">

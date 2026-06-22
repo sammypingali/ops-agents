@@ -66,6 +66,17 @@
   body[data-printing="custom"] .print-custom * {
     visibility: visible !important;
   }
+  /* The sidebar is visibility:hidden but still reserves layout space, and
+     <main> is position:relative (for the in-app icons) — together they offset
+     the absolutely-positioned report to the right. Drop the sidebar's space
+     and the relative context so the report sits against the page's left edge
+     and fills the full content width. */
+  body[data-printing] aside {
+    display: none !important;
+  }
+  body[data-printing] main {
+    position: static !important;
+  }
   body[data-printing="report"] .print-report,
   body[data-printing="custom"] .print-custom {
     position: absolute;
