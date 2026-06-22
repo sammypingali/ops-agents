@@ -2,6 +2,7 @@ import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getConversationMessages, getMessage, htmlToText } from "@/lib/missive";
 import { stageDraft } from "@/lib/draft-staging";
+import { runNoReplyFollowups } from "./no-reply-followup";
 import { postAgentAlert } from "@/lib/slack-alert";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -182,7 +183,7 @@ registerAgent({
   slug: "agent-15-reply-manager",
   displayName: "Agent 15 - Supplier Reply Manager",
   description:
-    "Owns the supplier conversation after a reply is detected: classifies the reply and drafts the right next message (answer, reframe a no-record reply as a fresh pricing ask, or nudge for the missing price), staged for a human to send. Light persistence (1 follow-up). Tracks flow_status to a finalized price. Never sends.",
+    "Owns the supplier conversation after a reply is detected: classifies the reply and drafts the right next message (answer, reframe a no-record reply as a fresh pricing ask, or nudge for the missing price), staged for a human to send. Also drafts no-reply follow-ups (at 4d and 8d after a sent RFQ that got no reply). Tracks flow_status to a finalized price. Never sends.",
   async run(ctx) {
     if (!process.env.ANTHROPIC_API_KEY) {
       ctx.setStatus("failure");
@@ -366,9 +367,21 @@ registerAgent({
       }
     }
 
-    ctx.setItemsProcessed(responded + priced + stale + closed + bounced + awaitingHuman);
+    // No-reply follow-ups: nudge suppliers who never replied to the initial RFQ
+    // (drafted at 4d and 8d, staged for review). Best-effort; never fails the run.
+    let followups = { drafted: 0, skipped: 0 };
+    try {
+      followups = await runNoReplyFollowups(
+        { agentId: ctx.agentId, runId: ctx.runId, log: (m, o) => ctx.log(m, o) },
+        admin
+      );
+    } catch (e: any) {
+      await ctx.log(`No-reply follow-up sweep failed: ${e?.message ?? e}`, { level: "warn", step: "followup" });
+    }
+
+    ctx.setItemsProcessed(responded + priced + stale + closed + bounced + awaitingHuman + followups.drafted);
     ctx.setStatus("success");
-    ctx.setSummary(`Threads: ${byThread.size} · ${responded} responded · ${priced} priced · ${awaitingHuman} awaiting-human · ${bounced} bounced · ${stale} stale · ${closed} closed · ${skipped} skipped`);
+    ctx.setSummary(`Threads: ${byThread.size} · ${responded} responded · ${priced} priced · ${awaitingHuman} awaiting-human · ${bounced} bounced · ${stale} stale · ${closed} closed · ${followups.drafted} follow-ups · ${skipped} skipped`);
   },
 });
 
