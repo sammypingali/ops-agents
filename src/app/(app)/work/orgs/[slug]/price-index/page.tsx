@@ -8,6 +8,7 @@ import { resolveSupplierNamesWithFallback, resolveMaterialNames, resolveQuoteRef
 import { ListPageHeader } from "@/components/list-page-header";
 import { MarketplaceFindingsList } from "@/components/marketplace-findings-list";
 import { RequoteList, type RequoteRow } from "@/components/requote-list";
+import { PriceIndexTabs } from "@/components/price-index-tabs";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -104,7 +105,7 @@ export default async function OrgPriceIndexPage({
   const base = `/work/orgs/${org.slug}/price-index`;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <ListPageHeader
         level={2}
         title="Live Price Index"
@@ -125,49 +126,50 @@ export default async function OrgPriceIndexPage({
         }
       />
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="font-serif text-xl tracking-tight">Marketplace — price re-checks</h2>
-          <p className="text-sm text-muted-foreground mt-1">Current public price vs. what&apos;s on file. Approve the ones worth applying.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {STATUSES.map((s) => (
-            <Link
-              key={s.value}
-              href={s.value === "pending_review" ? base : `${base}?status=${s.value}`}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                status === s.value ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {s.label}
-            </Link>
-          ))}
-        </div>
-        {findings.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">
-            No {STATUSES.find((s) => s.value === status)?.label.toLowerCase()} marketplace re-checks.
-          </p>
-        ) : (
-          <MarketplaceFindingsList rows={findings} canAct={canAct} slug={org.slug} />
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="font-serif text-xl tracking-tight">Direct suppliers — re-quote drafts</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Expiring quotes from non-marketplace suppliers, drafted for a fresh quote. Review and send — the full
-            back-and-forth is logged in{" "}
-            <Link href={`/work/orgs/${org.slug}/threads`} className="text-primary hover:underline">Threads</Link>.
-          </p>
-        </div>
-        {requotes.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No re-quote drafts right now.</p>
-        ) : (
-          <RequoteList rows={requotes} slug={org.slug} />
-        )}
-      </section>
+      <PriceIndexTabs
+        marketplaceCount={findings.length}
+        directCount={requotes.length}
+        marketplace={
+          <section className="space-y-3">
+            <p className="text-sm text-muted-foreground">Current public price vs. what&apos;s on file. Approve the ones worth applying.</p>
+            <div className="flex flex-wrap gap-2">
+              {STATUSES.map((s) => (
+                <Link
+                  key={s.value}
+                  href={s.value === "pending_review" ? base : `${base}?status=${s.value}`}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    status === s.value ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {s.label}
+                </Link>
+              ))}
+            </div>
+            {findings.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                No {STATUSES.find((s) => s.value === status)?.label.toLowerCase()} marketplace re-checks.
+              </p>
+            ) : (
+              <MarketplaceFindingsList rows={findings} canAct={canAct} slug={org.slug} />
+            )}
+          </section>
+        }
+        direct={
+          <section className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Expiring quotes from non-marketplace suppliers, drafted for a fresh quote. Review and send — the full
+              back-and-forth is logged in{" "}
+              <Link href={`/work/orgs/${org.slug}/threads`} className="text-primary hover:underline">Threads</Link>.
+            </p>
+            {requotes.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No re-quote drafts right now.</p>
+            ) : (
+              <RequoteList rows={requotes} slug={org.slug} />
+            )}
+          </section>
+        }
+      />
     </div>
   );
 }
