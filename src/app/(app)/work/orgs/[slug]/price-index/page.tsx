@@ -106,6 +106,14 @@ export default async function OrgPriceIndexPage({
         level={2}
         title="Live Price Index"
         description={`Keep ${org.name}'s pricing current. Marketplace suppliers are re-checked against their public price; direct suppliers get a re-quote draft to send.`}
+        actions={
+          <Link
+            href={`/work/orgs/${org.slug}/threads`}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-primary hover:bg-secondary/60"
+          >
+            All conversations in Threads →
+          </Link>
+        }
         explainer={
           <>
             Marketplace prices are read from public pages — a <span className="font-medium text-foreground">needs manual login</span> flag
@@ -145,7 +153,11 @@ export default async function OrgPriceIndexPage({
       <section className="space-y-3">
         <div>
           <h2 className="font-serif text-xl tracking-tight">Direct suppliers — re-quote drafts</h2>
-          <p className="text-sm text-muted-foreground mt-1">Expiring quotes from non-marketplace suppliers, drafted for a fresh quote. Review and send.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Expiring quotes from non-marketplace suppliers, drafted for a fresh quote. Review and send — the full
+            back-and-forth is logged in{" "}
+            <Link href={`/work/orgs/${org.slug}/threads`} className="text-primary hover:underline">Threads</Link>.
+          </p>
         </div>
         {requotes.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">No re-quote drafts right now.</p>
