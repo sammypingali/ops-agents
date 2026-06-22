@@ -75,20 +75,6 @@ export default async function HomePage() {
       </header>
 
       <HomeBoard counts={counts} rows={rows} />
-
-      <section>
-        <h2 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Market reference</h2>
-        <a
-          href="/work/price-pulse"
-          className="group flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3 hover:bg-secondary/60 transition-colors"
-        >
-          <div>
-            <div className="font-medium">Price Pulse</div>
-            <div className="text-sm text-muted-foreground">Live market spread per material across the Tenkara supplier corpus.</div>
-          </div>
-          <span className="text-muted-foreground group-hover:text-foreground" aria-hidden>→</span>
-        </a>
-      </section>
     </div>
   );
 }
