@@ -15,15 +15,25 @@ import { filenameFor } from "@/lib/csv";
 
 const COLS = 8;
 
+// Prefer the agent's structured unit_price (Agent 05); fall back to deriving it
+// from the pack-size string.
+function unitPriceOf(r: any): { value: number; unit: string } | null {
+  if (r.unit_price != null && Number.isFinite(Number(r.unit_price))) {
+    const fromPack = perUnitPrice(1, r.pack_size ?? null);
+    return { value: Number(r.unit_price), unit: fromPack?.unit ?? "unit" };
+  }
+  return perUnitPrice(r.current_price ?? r.baseline_price ?? null, r.pack_size ?? null);
+}
+
 function perUnitLabel(r: any): string {
-  const pu = perUnitPrice(r.current_price ?? r.baseline_price ?? null, r.pack_size ?? null);
+  const pu = unitPriceOf(r);
   return pu ? `$${pu.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}/${pu.unit}` : "";
 }
 
 // Cheapest per-unit first; rows without a parseable pack size sort last.
 function tierSort(a: any, b: any): number {
-  const pa = perUnitPrice(a.current_price ?? a.baseline_price ?? null, a.pack_size ?? null)?.value ?? Infinity;
-  const pb = perUnitPrice(b.current_price ?? b.baseline_price ?? null, b.pack_size ?? null)?.value ?? Infinity;
+  const pa = unitPriceOf(a)?.value ?? Infinity;
+  const pb = unitPriceOf(b)?.value ?? Infinity;
   if (pa !== pb) return pa - pb;
   return (a.baseline_price ?? Infinity) - (b.baseline_price ?? Infinity);
 }
@@ -99,7 +109,7 @@ export function MarketplaceFindingsList({ rows, canAct, slug = "all" }: { rows: 
                   </TableCell>
                 </TableRow>
                 {sorted.map((r) => {
-                  const pu = perUnitPrice(r.current_price ?? r.baseline_price ?? null, r.pack_size ?? null);
+                  const pu = unitPriceOf(r);
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="align-top">

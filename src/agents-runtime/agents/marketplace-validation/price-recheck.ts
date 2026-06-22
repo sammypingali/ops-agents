@@ -19,10 +19,18 @@ export interface RecheckInput {
   unit: string | null;
 }
 
+export interface PriceTier {
+  pack_size: string | null; // free-text e.g. "25 kg"
+  price: number | null;     // total price for that pack
+  unit_price: number | null; // per-unit ($/kg, $/lb…) when derivable
+}
+
 export interface RecheckResult {
   classification: "current_price_found" | "link_broken" | "needs_review" | "login_required";
   current_price: number | null;
   pack_size: string | null;            // free-text e.g. "50 lb"
+  unit_price: number | null;           // best (lowest) per-unit price seen
+  tiers: PriceTier[];                  // every visible pack-size / volume-break tier
   source_url: string | null;
   source_citations: string[];
   notes: string | null;
@@ -44,6 +52,11 @@ Return ONLY a JSON object (no prose) like:
   "classification": "current_price_found | link_broken | needs_review | login_required",
   "current_price": 99.99,
   "pack_size": "50 lb",
+  "unit_price": 2.00,
+  "tiers": [
+    {"pack_size": "1 kg", "price": 25.00},
+    {"pack_size": "25 kg", "price": 450.00}
+  ],
   "source_url": "https://supplier.com/...",
   "source_citations": ["https://...", "..."],
   "notes": "one-line summary; mention if pack size differs from baseline"
@@ -51,6 +64,9 @@ Return ONLY a JSON object (no prose) like:
 \`\`\`
 
 Rules:
+- "tiers": capture EVERY visible pack-size / quantity / volume-break price on the page as its own entry (e.g. "1 kg $25", "25 kg $450", or an "As low as $18.00 for 100+ kg" break → {"pack_size":"100 kg","price":1800.00}). Empty array if none are visible.
+- "unit_price": the best (lowest) per-unit price you can derive across the tiers (price ÷ quantity, e.g. 450/25 = 18.00 per kg). Numeric or null.
+- "current_price" + "pack_size" stay the single closest match to our baseline pack size (for the change comparison).
 - "login_required" when the price is hidden behind a sign-in / registration / "create an account" / "log in to see price" wall — i.e. it could be read by a human who signs up, but not publicly. Ops will sign up and pull it manually.
 - "link_broken" ONLY for hard 404 / product removed / redirect to category page.
 - "needs_review" for other ambiguous cases: multiple SKUs on page, currency mismatch, price requires a custom quote/RFQ, page exists but pack size differs significantly.
@@ -111,6 +127,8 @@ export async function recheckMarketplaceQuote(input: RecheckInput): Promise<Rech
       classification: "needs_review",
       current_price: null,
       pack_size: null,
+      unit_price: null,
+      tiers: [],
       source_url: input.product_url,
       source_citations: [],
       notes: `Model returned no JSON: ${text.slice(0, 200)}`,
@@ -132,10 +150,31 @@ export async function recheckMarketplaceQuote(input: RecheckInput): Promise<Rech
     if (Number.isFinite(n)) price = n;
   }
 
+  const toNum = (v: any): number | null => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = parseFloat(v.replace(/[^0-9.\-]/g, ""));
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
+  };
+  const tiers: PriceTier[] = Array.isArray(parsed.tiers)
+    ? parsed.tiers
+        .filter((t: any) => t && typeof t === "object")
+        .map((t: any) => ({
+          pack_size: typeof t.pack_size === "string" ? t.pack_size : null,
+          price: toNum(t.price),
+          unit_price: toNum(t.unit_price),
+        }))
+        .slice(0, 20)
+    : [];
+
   return {
     classification: validCls,
     current_price: price,
     pack_size: typeof parsed.pack_size === "string" ? parsed.pack_size : null,
+    unit_price: toNum(parsed.unit_price),
+    tiers,
     source_url: typeof parsed.source_url === "string" ? parsed.source_url : input.product_url,
     source_citations: Array.isArray(parsed.source_citations)
       ? parsed.source_citations.filter((u: any) => typeof u === "string").slice(0, 8)
