@@ -346,39 +346,31 @@ function QuoteList({
   run: (fn: () => Promise<{ ok: boolean; error?: string; parsed?: number }>, okText: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {quotes.map((q) => {
         const perUnit = q.unit_price != null ? q.unit_price : q.price != null && q.case_size ? q.price / q.case_size : null;
         return (
-          <div key={q.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-            <QuoteStatusBadge status={q.status} />
-            <span className="font-medium">{q.supplier_name ?? "—"}</span>
-            {perUnit != null && (
-              <span className="tabular-nums">
-                ${perUnit.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                {q.unit_of_measurement ? `/${q.unit_of_measurement}` : ""}
-              </span>
-            )}
-            {q.price != null && <span className="text-muted-foreground">${q.price} / {q.case_size ?? "?"} {q.unit_of_measurement ?? ""}</span>}
-            {q.confidence && <span className="text-muted-foreground">conf {q.confidence}</span>}
-            {canEdit && q.status === "pending_review" && (
-              <span className="ml-auto flex items-center gap-3">
-                <button
-                  className="text-green-700 hover:underline disabled:opacity-50"
-                  disabled={pending}
-                  onClick={() => run(() => approveStagedQuote(q.id), "Quote approved")}
-                >
-                  approve
-                </button>
-                <button
-                  className="text-red-600 hover:underline disabled:opacity-50"
-                  disabled={pending}
-                  onClick={() => run(() => dismissStagedQuote(q.id), "Quote dismissed")}
-                >
-                  dismiss
-                </button>
-              </span>
-            )}
+          <div
+            key={q.id}
+            className="grid grid-cols-[5rem_minmax(0,1.4fr)_7rem_minmax(0,1fr)_8rem] items-center gap-x-3 text-xs"
+          >
+            <span><QuoteStatusBadge status={q.status} /></span>
+            <span className="font-medium truncate" title={q.supplier_name ?? undefined}>{q.supplier_name ?? "—"}</span>
+            <span className="tabular-nums">
+              {perUnit != null ? `$${perUnit.toLocaleString(undefined, { maximumFractionDigits: 4 })}${q.unit_of_measurement ? `/${q.unit_of_measurement}` : ""}` : "—"}
+            </span>
+            <span className="text-muted-foreground truncate">
+              {q.price != null ? `$${q.price} / ${q.case_size ?? "?"} ${q.unit_of_measurement ?? ""}` : ""}
+              {q.confidence ? ` · conf ${q.confidence}` : ""}
+            </span>
+            <span className="flex items-center justify-end gap-3">
+              {canEdit && q.status === "pending_review" && (
+                <>
+                  <button className="text-green-700 hover:underline disabled:opacity-50" disabled={pending} onClick={() => run(() => approveStagedQuote(q.id), "Quote approved")}>approve</button>
+                  <button className="text-red-600 hover:underline disabled:opacity-50" disabled={pending} onClick={() => run(() => dismissStagedQuote(q.id), "Quote dismissed")}>dismiss</button>
+                </>
+              )}
+            </span>
           </div>
         );
       })}
@@ -400,20 +392,25 @@ function OrderList({
   assignOptions?: SelectOption[];
 }) {
   return (
-    <div className="space-y-1.5 py-1">
+    <div className="space-y-1 py-1">
       {orders.map((o) => (
-        <div key={o.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-          <span className="text-muted-foreground w-24">{fmtDate(o.order_date)}</span>
-          {o.material_label && <span className="font-medium">{o.material_label}</span>}
-          {o.supplier_name && <span className="text-muted-foreground">{o.supplier_name}</span>}
-          <span>ordered {fmtQty(o.ordered_qty, o.qty_unit)}</span>
-          {o.po_qty != null && o.po_qty !== o.ordered_qty && <span className="text-muted-foreground">PO {fmtQty(o.po_qty, o.qty_unit)}</span>}
-          {o.unit_price != null && <span className="text-muted-foreground">${o.unit_price}/u</span>}
-          {o.coa_expiry && <span className="text-muted-foreground">COA exp {fmtDate(o.coa_expiry)}</span>}
-          {o.material_expiry && <span className="text-muted-foreground">mat exp {fmtDate(o.material_expiry)}</span>}
-          {o.status === "parsed" && <Badge variant="secondary">parsed</Badge>}
-          {canEdit && (
-            <span className="ml-auto flex items-center gap-2">
+        <div key={o.id} className="grid grid-cols-[5rem_minmax(0,1.4fr)_7rem_minmax(0,1fr)_minmax(8rem,auto)] items-center gap-x-3 text-xs">
+          <span className="text-muted-foreground">{fmtDate(o.order_date)}</span>
+          <span className="truncate" title={`${o.material_label ?? ""}${o.supplier_name ? ` · ${o.supplier_name}` : ""}`}>
+            {o.material_label && <span className="font-medium">{o.material_label}</span>}
+            {o.supplier_name && <span className="text-muted-foreground">{o.material_label ? " · " : ""}{o.supplier_name}</span>}
+          </span>
+          <span className="tabular-nums">{fmtQty(o.ordered_qty, o.qty_unit)}</span>
+          <span className="text-muted-foreground truncate tabular-nums">
+            {o.unit_price != null ? `$${o.unit_price}/u` : ""}
+            {o.po_qty != null && o.po_qty !== o.ordered_qty ? ` · PO ${fmtQty(o.po_qty, o.qty_unit)}` : ""}
+            {o.coa_expiry ? ` · COA ${fmtDate(o.coa_expiry)}` : ""}
+            {o.material_expiry ? ` · exp ${fmtDate(o.material_expiry)}` : ""}
+          </span>
+          <span className="flex items-center justify-end gap-2">
+            {o.status === "parsed" && <Badge variant="secondary">parsed</Badge>}
+            {canEdit && (
+            <>
               {assignOptions && assignOptions.length > 0 && (
                 <Select
                   size="sm"
@@ -434,8 +431,9 @@ function OrderList({
               <button className="text-red-600 hover:underline" disabled={pending} onClick={() => run(() => deleteOrder(o.id), "Order deleted")}>
                 delete
               </button>
-            </span>
-          )}
+            </>
+            )}
+          </span>
         </div>
       ))}
     </div>
