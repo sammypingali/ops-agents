@@ -17,7 +17,6 @@ const sections = [
   { href: "/materials", label: "Materials" },
   { href: "/savings", label: "Savings" },
   { href: "/price-index", label: "Price Index" },
-  { href: "/suppliers", label: "Suppliers" },
   { href: "/cases", label: "Cases" },
   { href: "/approvals", label: "Approvals" },
 ];
