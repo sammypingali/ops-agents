@@ -16,7 +16,10 @@ const TYPE_OPTIONS = [
 
 export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean; slug: string }) {
   const [type, setType] = useState("all");
-  const typeRows = type === "all" ? rows : rows.filter((r: any) => leadMarketKind(r.payload?.site_type) === type);
+  const typeRows =
+    type === "all"
+      ? rows
+      : rows.filter((r: any) => (r.market_kind ?? leadMarketKind(r.payload?.site_type)) === type);
 
   const { filtered, controls } = useListFilter(typeRows, {
     searchText: (r) => `${r.supplier_name ?? ""} ${r.material_name ?? ""} ${r.grade ?? ""}`,
@@ -33,7 +36,7 @@ export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean
     r.supplier_name ?? "",
     r.material_name ?? "",
     r.grade ?? "",
-    leadMarketKind(r.payload?.site_type) ?? "",
+    r.market_kind ?? leadMarketKind(r.payload?.site_type) ?? "",
     r.source ?? "",
     r.status ?? "",
     r.created_at ?? "",

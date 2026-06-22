@@ -90,7 +90,7 @@ export function LeadRichRow({
   const signalCount = r.payload?.signal_count as number | undefined;
   const sourceUrl = (r.payload?.source_url ?? r.payload?.supplier_website) as string | undefined;
   const siteType = r.payload?.site_type as "M" | "MS" | "N" | undefined;
-  const marketKind = leadMarketKind(siteType);
+  const marketKind = (r.market_kind as "marketplace" | "direct" | null | undefined) ?? leadMarketKind(siteType);
   const completeness = r.payload?.completeness_score != null ? Number(r.payload.completeness_score) : null;
   const citations = Array.isArray(r.payload?.source_citations) ? r.payload.source_citations : [];
 

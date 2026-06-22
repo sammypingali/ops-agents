@@ -8,7 +8,8 @@ import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
 import { ListPageHeader } from "@/components/list-page-header";
 import { LeadsList } from "@/components/leads-list";
 import { SuppliersCsvUpload } from "@/components/suppliers-csv-upload";
-import { resolveMaterialGrades } from "@/lib/tenkara-names";
+import { resolveMaterialGrades, resolveSupplierMarketplace } from "@/lib/tenkara-names";
+import { leadMarketKind } from "@/components/lead-rich-row";
 import { existingQuotesForOrg, type ExistingQuote } from "@/agents-runtime/agents/lead-creator/sql";
 
 export const dynamic = "force-dynamic";
@@ -31,12 +32,23 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
 
   // Grade lives on the Tenkara material — resolve by material_id and attach.
   let leadGrades = new Map<string, string>();
+  let leadMarketplace = new Map<string, boolean>();
   try {
-    leadGrades = await resolveMaterialGrades(leads.map((r) => r.material_id).filter(Boolean));
+    [leadGrades, leadMarketplace] = await Promise.all([
+      resolveMaterialGrades(leads.map((r) => r.material_id).filter(Boolean)),
+      resolveSupplierMarketplace(leads.map((r) => r.supplier_id).filter(Boolean)),
+    ]);
   } catch {
-    // Tenkara unreachable — fall back to payload grade in the row component.
+    // Tenkara unreachable — fall back to payload grade / site_type in the row.
   }
-  leads = leads.map((r) => ({ ...r, grade: r.material_id ? leadGrades.get(r.material_id) ?? null : null }));
+  // market_kind: prefer the supplier's is_marketplace flag (covers platform-DB
+  // leads), fall back to the scanner's site_type for scout leads.
+  leads = leads.map((r) => {
+    const flag = r.supplier_id ? leadMarketplace.get(r.supplier_id) : undefined;
+    const market_kind =
+      flag === true ? "marketplace" : flag === false ? "direct" : leadMarketKind(r.payload?.site_type);
+    return { ...r, grade: r.material_id ? leadGrades.get(r.material_id) ?? null : null, market_kind };
+  });
 
   // Promote/Drop gating: the operator can act if they see all orgs or this org
   // is in their assignment set, and they hold an acting role.

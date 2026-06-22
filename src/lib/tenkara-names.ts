@@ -92,6 +92,22 @@ export async function resolveQuoteRefs(ids: string[]): Promise<Map<string, strin
   return out;
 }
 
+// Whether each supplier is a marketplace supplier (vs a direct/RFQ supplier).
+// Lets platform-DB leads show a Marketplace/Direct type even without the
+// scanner's site_type. Maps supplier_id → is_marketplace.
+export async function resolveSupplierMarketplace(ids: string[]): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  const unique = Array.from(new Set(ids.filter((x): x is string => !!x)));
+  if (unique.length === 0) return out;
+  const rows = await tenkaraQuery<{ id: string; is_marketplace: boolean | null }>(
+    `select id::text as id, coalesce(is_marketplace, false) as is_marketplace
+       from suppliers where id = any($1::uuid[])`,
+    [unique]
+  );
+  for (const r of rows) out.set(r.id, r.is_marketplace === true);
+  return out;
+}
+
 // Quote expiry dates (the reason a re-quote is drafted). Maps quote_id → the
 // product_expiry date string, so the UI can show "Expires <date>".
 export async function resolveQuoteExpiries(ids: string[]): Promise<Map<string, string>> {
