@@ -70,9 +70,11 @@
   body[data-printing="custom"] .print-custom {
     position: absolute;
     left: 0;
+    right: 0;
     top: 0;
-    width: 100%;
-    margin: 0;
+    width: auto;
+    max-width: none !important;
+    margin: 0 !important;
     padding: 0;
   }
   body[data-printing] .no-print,
