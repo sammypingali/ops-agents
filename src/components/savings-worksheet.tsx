@@ -53,7 +53,7 @@ export function SavingsWorksheet({
       {scorecard.materials_sourcing > 0 && (
         <section className="space-y-3">
           <div>
-            <h2 className="font-serif text-2xl tracking-tight">Live sourcing</h2>
+            <h2 className="font-serif text-xl tracking-tight">Live sourcing</h2>
             <p className="text-sm text-muted-foreground max-w-2xl mt-1">
               Best price sourced so far in the current outreach (quotes staged from supplier replies), scored against what{" "}
               {clientName} pays today. <span className="text-foreground font-medium">Beats client</span> = the best sourced

@@ -3,8 +3,10 @@
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { LeadRichRow, LeadRichHeaders, leadRichColSpan } from "@/components/lead-rich-row";
 import { useListFilter, byString, byNumberDesc, byDateDesc } from "@/components/use-list-filter";
+import { ListCsvButton } from "@/components/list-csv-button";
+import { filenameFor } from "@/lib/csv";
 
-export function LeadsList({ rows, canAct }: { rows: any[]; canAct: boolean }) {
+export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean; slug: string }) {
   const { filtered, controls } = useListFilter(rows, {
     searchText: (r) => `${r.supplier_name ?? ""} ${r.material_name ?? ""} ${r.grade ?? ""}`,
     searchPlaceholder: "supplier, material, grade…",
@@ -16,9 +18,26 @@ export function LeadsList({ rows, canAct }: { rows: any[]; canAct: boolean }) {
     ],
   });
 
+  const csvRows = filtered.map((r: any) => [
+    r.supplier_name ?? "",
+    r.material_name ?? "",
+    r.grade ?? "",
+    r.confidence_score ?? "",
+    r.source ?? "",
+    r.status ?? "",
+    r.created_at ?? "",
+  ]);
+
   return (
     <div className="space-y-3">
-      {controls}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        {controls}
+        <ListCsvButton
+          filename={filenameFor(slug, "leads")}
+          headers={["Supplier", "Material", "Grade", "Confidence", "Source", "Status", "Created"]}
+          rows={csvRows}
+        />
+      </div>
       <Table>
         <TableHeader>
           <LeadRichHeaders showOrg={false} />

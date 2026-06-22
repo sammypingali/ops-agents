@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
 import { getSession, hasAnyRole } from "@/lib/auth";
 import { seesAllOrgs, getAssignedOrgIds } from "@/lib/org-access";
-import { LeadsExportCsvButton } from "@/components/leads-export-csv-button";
+import { ListPageHeader } from "@/components/list-page-header";
 import { LeadsList } from "@/components/leads-list";
 import { SuppliersCsvUpload } from "@/components/suppliers-csv-upload";
 import { resolveMaterialGrades } from "@/lib/tenkara-names";
@@ -56,20 +56,17 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Suppliers discovered for {org.name}. Download the CSV for the manual supplier-sourcing index.
-        </p>
-        <div className="flex items-start gap-2">
-          {canAct && <SuppliersCsvUpload orgId={org.id} />}
-          <LeadsExportCsvButton disabled={leads.length === 0} count={leads.length} filters={{ org: org.slug }} />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <ListPageHeader
+        level={2}
+        title="Leads"
+        description={`Suppliers discovered for ${org.name}. Export the CSV for the manual supplier-sourcing index.`}
+        actions={canAct ? <SuppliersCsvUpload orgId={org.id} /> : undefined}
+      />
       {leads.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4">No active leads for this org.</p>
       ) : (
-        <LeadsList rows={leads} canAct={canAct} />
+        <LeadsList rows={leads} canAct={canAct} slug={org.slug} />
       )}
 
       <section className="space-y-2 pt-2">

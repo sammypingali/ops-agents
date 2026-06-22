@@ -4,6 +4,7 @@ import { getSession, hasAnyRole } from "@/lib/auth";
 import { getMaterialProfile } from "@/lib/material-profile";
 import { getMaterialSourcingStatus } from "@/lib/material-sourcing-status";
 import { MaterialsPanel } from "@/components/materials-panel";
+import { ListPageHeader } from "@/components/list-page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -38,14 +39,21 @@ export default async function OrgMaterialsPage({ params }: { params: { slug: str
   }
 
   return (
-    <MaterialsPanel
-      orgId={org.id}
-      slug={org.slug}
-      profile={profile}
-      canEdit={canEdit}
-      statuses={statuses}
-      quotesByMaterial={quotesByMaterial}
-      sourcingNotes={settingsRow?.sourcing_notes ?? null}
-    />
+    <div className="space-y-6">
+      <ListPageHeader
+        level={2}
+        title="Materials"
+        description="What this client buys and where each one stands. Expand a row for its quotes, uploads, and approvals."
+      />
+      <MaterialsPanel
+        orgId={org.id}
+        slug={org.slug}
+        profile={profile}
+        canEdit={canEdit}
+        statuses={statuses}
+        quotesByMaterial={quotesByMaterial}
+        sourcingNotes={settingsRow?.sourcing_notes ?? null}
+      />
+    </div>
   );
 }
