@@ -110,6 +110,7 @@ export default async function OrgPriceIndexPage({
         level={2}
         title="Live Price Index"
         description={`Keep ${org.name}'s pricing current. Marketplace suppliers are re-checked against their public price; direct suppliers get a re-quote draft to send.`}
+        collectedBy="Agent 05 (Marketplace Re-check) + Agent 02 (Revalidation)"
         actions={
           <Link
             href={`/work/orgs/${org.slug}/threads`}

@@ -89,7 +89,7 @@ export function MaterialsPanel({
     .map((m) => ({ value: m.tenkaraMaterialId as string, label: m.grade ? `${m.label} — ${m.grade}` : m.label }));
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-5">
       {canEdit && (
         <Card className="tb-surface shadow-none">
           <CardContent className="py-4 flex flex-wrap items-center gap-3">

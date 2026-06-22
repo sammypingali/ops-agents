@@ -99,6 +99,14 @@ export function LeadRichRow({
       <TableCell className="font-medium align-top">
         <div className="flex items-center gap-2 flex-wrap">
           <span>{r.supplier_name ?? "—"}</span>
+          {completeness != null && (
+            <span
+              className="text-[10px] font-normal text-muted-foreground"
+              title="Share of RFQ fields the scanner captured (pricing, contact, MOQ, grades, certs, HQ)"
+            >
+              {Math.round(completeness * 100)}% ready
+            </span>
+          )}
         </div>
         {(r.payload?.supplier_country || r.payload?.supplier_role) && (
           <div className="text-xs text-muted-foreground">
@@ -184,14 +192,6 @@ export function LeadRichRow({
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
-        )}
-        {completeness != null && (
-          <div
-            className="text-[10px] text-muted-foreground mt-0.5"
-            title="Share of RFQ fields the scanner captured (pricing, contact, MOQ, grades, certs, HQ)"
-          >
-            {Math.round(completeness * 100)}% ready
-          </div>
         )}
       </TableCell>
       <TableCell className="align-top"><LeadSourceBadge source={r.source} /></TableCell>

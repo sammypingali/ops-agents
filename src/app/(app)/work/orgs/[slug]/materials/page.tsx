@@ -45,6 +45,7 @@ export default async function OrgMaterialsPage({ params }: { params: { slug: str
         level={2}
         title="Materials"
         description="What this client buys and where each one stands. Expand a row for its quotes, uploads, and approvals."
+        collectedBy="Agent 08 (Email Scanner) extracts quotes from supplier replies"
       />
 
       <Link

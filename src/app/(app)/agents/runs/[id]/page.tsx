@@ -15,7 +15,7 @@ export default async function RunDetail({ params }: { params: { id: string } }) 
   const [runRes, eventsRes] = await Promise.all([
     admin
       .from("agent_runs")
-      .select("id, status, run_started_at, run_finished_at, summary, items_processed, agents(name, slug, description)")
+      .select("id, status, run_started_at, run_finished_at, summary, items_processed, agents!agent_runs_agent_id_fkey(name, slug, description)")
       .eq("id", params.id)
       .maybeSingle(),
     admin

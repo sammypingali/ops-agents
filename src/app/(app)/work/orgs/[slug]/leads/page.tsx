@@ -60,6 +60,7 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
         level={2}
         title="Leads"
         description={`Suppliers discovered for ${org.name}. Export the CSV for the manual supplier-sourcing index.`}
+        collectedBy="Agent 03 (Lead Creator) + Agent 06 (Enrichment)"
         actions={canAct ? <SuppliersCsvUpload orgId={org.id} /> : undefined}
       />
       {leads.length === 0 ? (
@@ -69,8 +70,8 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
       )}
 
       <section className="space-y-2 pt-2">
-        <h2 className="text-sm uppercase tracking-wider text-muted-foreground font-medium">
-          Existing saved quotes <span className="ml-1 text-foreground">· {quotes.length}</span>
+        <h2 className="font-serif text-xl tracking-tight">
+          Existing saved quotes <span className="text-muted-foreground text-base">· {quotes.length}</span>
         </h2>
         <p className="text-xs text-muted-foreground">
           Quotes already in the database for {org.name}&apos;s materials — so you can see what&apos;s covered before sourcing more. Re-quoting these is Agent 02&apos;s job, not new outreach.

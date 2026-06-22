@@ -12,6 +12,7 @@ export function ListPageHeader({
   actions,
   explainer,
   filters,
+  collectedBy,
   level = 1,
 }: {
   title: React.ReactNode;
@@ -19,6 +20,7 @@ export function ListPageHeader({
   actions?: React.ReactNode;
   explainer?: React.ReactNode;
   filters?: React.ReactNode;
+  collectedBy?: string;
   level?: 1 | 2;
 }) {
   const Heading = level === 2 ? "h2" : "h1";
@@ -30,6 +32,11 @@ export function ListPageHeader({
         <div>
           <Heading className={headingClass}>{title}</Heading>
           {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+          {collectedBy && (
+            <p className="mt-1 text-xs text-muted-foreground" title="The agents that populate this view in the background.">
+              <span aria-hidden>⚙ </span>Collected by {collectedBy}
+            </p>
+          )}
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>

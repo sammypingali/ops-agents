@@ -62,11 +62,12 @@ export default async function OrgThreadsPage({ params }: { params: { slug: strin
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <ListPageHeader
         level={2}
         title="All Threads"
         description="Every email conversation for this client — outbound RFQs and inbound supplier replies. Drafts only; nothing sends automatically. Re-quotes to maintain live pricing are on the Live Price Index tab."
+        collectedBy="Agent 04 (Outreach) + Agent 08 (Email Scanner) + Agent 15 (Reply Manager)"
         explainer={
           <>
             Drafts are composed automatically and staged for review. Filter by <span className="font-medium text-foreground">kind</span> to

@@ -14,7 +14,7 @@ registerAgent({
 
     const { data: runs } = await admin
       .from("agent_runs")
-      .select("status, items_processed, agent_id, agents(name, slug)")
+      .select("status, items_processed, agent_id, agents!agent_runs_agent_id_fkey(name, slug)")
       .gte("run_started_at", since);
 
     const rows = runs ?? [];

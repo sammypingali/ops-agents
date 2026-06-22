@@ -22,7 +22,7 @@ export default async function AgentActivityPage() {
   const [runsRes, leadExportsRes, csvDownloadsRes, leadCountRes] = await Promise.all([
     admin
       .from("agent_runs")
-      .select("id, agent_id, org_id, run_started_at, run_finished_at, status, summary, items_processed, metadata, agents(name, slug, description), orgs(slug, name)")
+      .select("id, agent_id, org_id, run_started_at, run_finished_at, status, summary, items_processed, metadata, agents!agent_runs_agent_id_fkey(name, slug, description), orgs(slug, name)")
       .order("run_started_at", { ascending: false })
       .limit(60),
     admin

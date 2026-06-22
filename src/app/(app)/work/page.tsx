@@ -36,7 +36,7 @@ export default async function TodayInboxPage() {
 
   const { data: recentFailures } = await admin
     .from("agent_runs")
-    .select("id, agent_id, status, summary, run_started_at, agents(name, slug)")
+    .select("id, agent_id, status, summary, run_started_at, agents!agent_runs_agent_id_fkey(name, slug)")
     .eq("status", "failure")
     .order("run_started_at", { ascending: false })
     .limit(5);
