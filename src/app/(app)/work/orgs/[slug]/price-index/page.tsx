@@ -104,7 +104,7 @@ export default async function OrgPriceIndexPage({
     <div className="space-y-8">
       <ListPageHeader
         level={2}
-        title="Price Index"
+        title="Live Price Index"
         description={`Keep ${org.name}'s pricing current. Marketplace suppliers are re-checked against their public price; direct suppliers get a re-quote draft to send.`}
         explainer={
           <>

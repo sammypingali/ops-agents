@@ -10,13 +10,13 @@ export const dynamic = "force-dynamic";
 const sections = [
   { href: "", label: "Overview" },
   { href: "/profile", label: "Client Profile" },
+  { href: "/materials", label: "Materials" },
   { href: "/leads", label: "Leads" },
   { href: "/threads", label: "Threads" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/quotes", label: "Quotes" },
-  { href: "/materials", label: "Materials" },
+  { href: "/price-index", label: "Live Price Index" },
   { href: "/savings", label: "Savings" },
-  { href: "/price-index", label: "Price Index" },
   { href: "/cases", label: "Cases" },
   { href: "/approvals", label: "Approvals" },
 ];
