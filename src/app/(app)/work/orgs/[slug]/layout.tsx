@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrgSubnav } from "@/components/org-subnav";
-import { WorkflowStepper } from "@/components/workflow-stepper";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +46,6 @@ export default async function OrgLayout({
           </p>
         </div>
       </header>
-      <WorkflowStepper base={base} />
       <OrgSubnav base={base} sections={sections} />
       <div>{children}</div>
     </div>

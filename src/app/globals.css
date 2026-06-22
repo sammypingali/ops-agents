@@ -32,8 +32,8 @@
     --highlight: 56 100% 91%;             /* warm yellow #FFFAD0 */
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 93%;                   /* #EEEEEE */
-    --input: 0 0% 93%;
+    --border: 0 0% 87%;                   /* #DEDEDE — a touch darker so dividers/columns read clearly */
+    --input: 0 0% 87%;
     --ring: 236 100% 50%;
     --radius: 0.375rem;
   }
