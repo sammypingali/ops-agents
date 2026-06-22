@@ -2,15 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { getSession, hasAnyRole } from "@/lib/auth";
 import { ClientProfilePanel, type ProfileValue, type SettingsValue, type UploadItem } from "@/components/client-profile-form";
-import { MaterialsPanel } from "@/components/materials-panel";
-import { getMaterialProfile } from "@/lib/material-profile";
-import { getMaterialSourcingStatus } from "@/lib/material-sourcing-status";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-serif text-2xl tracking-tight">{children}</h2>;
-}
 
 export default async function ClientProfilePage({ params }: { params: { slug: string } }) {
   const session = (await getSession())!;
@@ -64,32 +58,24 @@ export default async function ClientProfilePage({ params }: { params: { slug: st
   const uploads = (uploadsRes.data ?? []) as UploadItem[];
   const canEdit = hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
 
-  // Comprehensive client tracker: who the client is, then their materials with a
-  // per-material sourcing status that leads into Leads / Threads / Live Price
-  // Index / Savings.
-  const materialProfile = await getMaterialProfile(org.id);
-  const statuses = await getMaterialSourcingStatus(admin, org.id, org.tenkara_org_id ?? null, materialProfile);
-
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Who this client is — researched from the web plus their Tenkara data, your settings, and uploads, and summarized
-          here for you to edit.
-        </p>
-        <ClientProfilePanel orgId={org.id} profile={profile} settings={settings} uploads={uploads} canEdit={canEdit} />
-      </section>
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Who this client is — researched from the web plus their Tenkara data, your settings, and uploads, and summarized
+        here for you to edit.
+      </p>
+      <ClientProfilePanel orgId={org.id} profile={profile} settings={settings} uploads={uploads} canEdit={canEdit} />
 
-      <section className="space-y-4">
+      <Link
+        href={`/work/orgs/${org.slug}/materials`}
+        className="group flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3 hover:bg-secondary/60 transition-colors"
+      >
         <div>
-          <SectionTitle>Materials</SectionTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            What this client buys and where each one stands. The <span className="font-medium text-foreground">Sourcing</span>{" "}
-            status links into Leads, Threads, Live Price Index, or Savings.
-          </p>
+          <div className="font-medium">Materials &amp; sourcing</div>
+          <div className="text-sm text-muted-foreground">What this client buys and where each one stands.</div>
         </div>
-        <MaterialsPanel orgId={org.id} slug={org.slug} profile={materialProfile} canEdit={canEdit} statuses={statuses} />
-      </section>
+        <span className="text-muted-foreground group-hover:text-foreground" aria-hidden>→</span>
+      </Link>
     </div>
   );
 }
