@@ -20,7 +20,7 @@ export default async function OrgSuppliersPage({ params }: { params: { slug: str
         title="Suppliers"
         description={`Suppliers linked to ${org.name} in Tenkara, by approval status.`}
       />
-      <ClientSuppliersSection suppliers={suppliers} slug={org.slug} />
+      <ClientSuppliersSection suppliers={suppliers} />
     </div>
   );
 }

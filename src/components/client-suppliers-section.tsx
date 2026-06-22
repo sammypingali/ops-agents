@@ -28,7 +28,7 @@ function StatusBadge({ s }: { s: SupplierApproval }) {
   return <Badge variant={m.variant}>{m.label}</Badge>;
 }
 
-export function ClientSuppliersSection({ suppliers, slug }: { suppliers: ClientSuppliers; slug: string }) {
+export function ClientSuppliersSection({ suppliers }: { suppliers: ClientSuppliers }) {
   const all: ClientSupplier[] = [
     ...suppliers.approved,
     ...suppliers.pending_review,
