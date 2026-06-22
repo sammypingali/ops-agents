@@ -6,8 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { Select, type SelectOption } from "@/components/ui/select";
 import type { MaterialProfile, MaterialProfileRow, OrderLineRow } from "@/lib/material-profile";
+import type { MaterialSourcingStatus } from "@/lib/material-sourcing-status";
 import { uploadAndParsePO, confirmOrder, deleteOrder, rematchOrders, editOrder } from "@/app/actions/material-profile";
 
 function fmtQty(qty: number | null, unit: string | null): string {
@@ -29,7 +32,19 @@ const FREQ_VARIANT: Record<string, "default" | "secondary"> = {
   "No data": "secondary",
 };
 
-export function MaterialsPanel({ orgId, profile, canEdit }: { orgId: string; profile: MaterialProfile; canEdit: boolean }) {
+export function MaterialsPanel({
+  orgId,
+  slug,
+  profile,
+  canEdit,
+  statuses,
+}: {
+  orgId: string;
+  slug: string;
+  profile: MaterialProfile;
+  canEdit: boolean;
+  statuses?: Record<string, MaterialSourcingStatus>;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -112,6 +127,7 @@ export function MaterialsPanel({ orgId, profile, canEdit }: { orgId: string; pro
                 <TableRow>
                   <TableHead>Material</TableHead>
                   <TableHead>Grade</TableHead>
+                  <TableHead>Sourcing</TableHead>
                   <TableHead>Annual req.</TableHead>
                   <TableHead>Frequency</TableHead>
                   <TableHead>Avg order</TableHead>
@@ -121,7 +137,15 @@ export function MaterialsPanel({ orgId, profile, canEdit }: { orgId: string; pro
               </TableHeader>
               <TableBody>
                 {profile.materials.map((m) => (
-                  <MaterialRow key={m.tenkaraMaterialId ?? m.label} m={m} canEdit={canEdit} pending={pending} run={run} />
+                  <MaterialRow
+                    key={m.tenkaraMaterialId ?? m.label}
+                    m={m}
+                    canEdit={canEdit}
+                    pending={pending}
+                    run={run}
+                    status={m.tenkaraMaterialId ? statuses?.[m.tenkaraMaterialId] : undefined}
+                    base={`/work/orgs/${slug}`}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -165,16 +189,37 @@ export function MaterialsPanel({ orgId, profile, canEdit }: { orgId: string; pro
   );
 }
 
+function SourcingChip({ status, base }: { status?: MaterialSourcingStatus; base: string }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const inner = (
+    <span className={cn("inline-flex flex-col rounded-md px-2 py-1 text-left leading-tight", status.cls)}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide">{status.label}</span>
+      <span className="text-[10px] opacity-80">{status.reason}</span>
+    </span>
+  );
+  return status.tab ? (
+    <Link href={`${base}${status.tab}`} onClick={(e) => e.stopPropagation()} className="inline-block hover:opacity-80">
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
+}
+
 function MaterialRow({
   m,
   canEdit,
   pending,
   run,
+  status,
+  base,
 }: {
   m: MaterialProfileRow;
   canEdit: boolean;
   pending: boolean;
   run: (fn: () => Promise<{ ok: boolean; error?: string; parsed?: number }>, okText: string) => void;
+  status?: MaterialSourcingStatus;
+  base: string;
 }) {
   const [open, setOpen] = useState(false);
   const rec = m.recommendedShelfLifeMonths;
@@ -187,6 +232,7 @@ function MaterialRow({
           {m.orders.length > 0 && <span className="ml-2 text-xs text-muted-foreground">{open ? "▾" : "▸"} {m.orders.length}</span>}
         </TableCell>
         <TableCell>{m.grade ? <Badge variant="secondary">{m.grade}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+        <TableCell><SourcingChip status={status} base={base} /></TableCell>
         <TableCell>{m.annualVolume != null ? `${m.annualVolume.toLocaleString()}${m.volumeUnit ? ` ${m.volumeUnit}` : ""}/yr` : "—"}</TableCell>
         <TableCell>
           <Badge variant={FREQ_VARIANT[m.frequency.label]}>{m.frequency.label}</Badge>
@@ -202,7 +248,7 @@ function MaterialRow({
       </TableRow>
       {open && m.orders.length > 0 && (
         <TableRow>
-          <TableCell colSpan={7} className="bg-secondary/20">
+          <TableCell colSpan={8} className="bg-secondary/20">
             <OrderList orders={m.orders} canEdit={canEdit} pending={pending} run={run} />
           </TableCell>
         </TableRow>

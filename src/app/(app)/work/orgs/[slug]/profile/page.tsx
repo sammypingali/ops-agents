@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import { getSession, hasAnyRole } from "@/lib/auth";
 import { ClientProfilePanel, type ProfileValue, type SettingsValue, type UploadItem } from "@/components/client-profile-form";
 import { MaterialsPanel } from "@/components/materials-panel";
-import { PricingPipelineTable } from "@/components/pricing-pipeline-table";
 import { getMaterialProfile } from "@/lib/material-profile";
-import { loadPricingThreads } from "@/lib/pricing-pipeline";
+import { getMaterialSourcingStatus } from "@/lib/material-sourcing-status";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 export default async function ClientProfilePage({ params }: { params: { slug: string } }) {
   const session = (await getSession())!;
   const admin = createAdminClient();
-  const { data: org } = await admin.from("orgs").select("id, slug, name").eq("slug", params.slug).maybeSingle();
+  const { data: org } = await admin.from("orgs").select("id, slug, name, tenkara_org_id").eq("slug", params.slug).maybeSingle();
   if (!org) notFound();
 
   const [profileRes, settingsRes, uploadsRes] = await Promise.all([
@@ -65,13 +64,11 @@ export default async function ClientProfilePage({ params }: { params: { slug: st
   const uploads = (uploadsRes.data ?? []) as UploadItem[];
   const canEdit = hasAnyRole(session, ["admin", "ops_lead", "ops_operator"]);
 
-  // Comprehensive client tracker: profile, then this client's materials, then
-  // the live sourcing pipeline — one place to see who the client is, what they
-  // buy, and where each thread stands.
-  const [materialProfile, pipeline] = await Promise.all([
-    getMaterialProfile(org.id),
-    loadPricingThreads(admin, [org.id]),
-  ]);
+  // Comprehensive client tracker: who the client is, then their materials with a
+  // per-material sourcing status that leads into Leads / Threads / Live Price
+  // Index / Savings.
+  const materialProfile = await getMaterialProfile(org.id);
+  const statuses = await getMaterialSourcingStatus(admin, org.id, org.tenkara_org_id ?? null, materialProfile);
 
   return (
     <div className="space-y-8">
@@ -87,24 +84,11 @@ export default async function ClientProfilePage({ params }: { params: { slug: st
         <div>
           <SectionTitle>Materials</SectionTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            What this client buys — order frequency, shelf-life, and quote expiry, with PO history.
+            What this client buys and where each one stands. The <span className="font-medium text-foreground">Sourcing</span>{" "}
+            status links into Leads, Threads, Live Price Index, or Savings.
           </p>
         </div>
-        <MaterialsPanel orgId={org.id} profile={materialProfile} canEdit={canEdit} />
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <SectionTitle>Sourcing pipeline</SectionTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Every supplier thread for this client, from outreach to a finalized price.
-          </p>
-        </div>
-        <PricingPipelineTable
-          data={pipeline}
-          emptyReason="No tracked threads yet. They appear here once outreach is staged for this client."
-          slug={org.slug}
-        />
+        <MaterialsPanel orgId={org.id} slug={org.slug} profile={materialProfile} canEdit={canEdit} statuses={statuses} />
       </section>
     </div>
   );
