@@ -42,9 +42,11 @@ export async function getOrgOperatorPool(
   const toRef = (u: any): OperatorRef | null =>
     u && u.status !== "out_of_office" ? { id: u.id, name: u.display_name ?? u.email ?? "—", email: u.email ?? null } : null;
 
+  // user_org_assignments has two FKs to users (user_id + assigned_by), so the
+  // embed must name the relationship explicitly or PostgREST errors out.
   const { data: assigns } = await admin
     .from("user_org_assignments")
-    .select("users(id, display_name, email, status)")
+    .select("users:users!user_org_assignments_user_id_fkey(id, display_name, email, status)")
     .eq("org_id", orgId);
   let pool = (assigns ?? [])
     .map((a: any) => toRef(a.users))
