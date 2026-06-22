@@ -15,31 +15,37 @@
 
 @layer base {
   :root {
-    --background: 30 13% 96%;             /* cream #F7F6F5 */
-    --foreground: 0 0% 7%;                /* near-black #121212 */
-    --card: 0 0% 100%;                    /* white */
-    --card-foreground: 0 0% 7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
+    --background: 39 34% 91%;             /* warm parchment #F1E9DA — retro paper */
+    --foreground: 30 12% 12%;             /* warm near-black */
+    --card: 40 40% 98%;                   /* soft ivory, pops against the parchment */
+    --card-foreground: 30 12% 12%;
+    --popover: 40 40% 98%;
+    --popover-foreground: 30 12% 12%;
     --primary: 236 100% 50%;              /* electric blue #0011FF */
     --primary-foreground: 0 0% 100%;
-    --secondary: 30 13% 92%;
-    --secondary-foreground: 0 0% 7%;
-    --muted: 30 13% 94%;
-    --muted-foreground: 0 0% 35%;
+    --secondary: 38 24% 86%;
+    --secondary-foreground: 30 12% 12%;
+    --muted: 38 26% 89%;
+    --muted-foreground: 30 8% 36%;
     --accent: 187 100% 80%;               /* cyan #99EEFF */
     --accent-foreground: 0 0% 7%;
     --highlight: 56 100% 91%;             /* warm yellow #FFFAD0 */
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 87%;                   /* #DEDEDE — a touch darker so dividers/columns read clearly */
-    --input: 0 0% 87%;
+    --border: 36 16% 80%;                 /* warm taupe — dividers read clearly on parchment */
+    --input: 36 16% 80%;
     --ring: 236 100% 50%;
     --radius: 0.375rem;
   }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    /* Faint dot-grid for a subtle retro paper texture — barely-there, prints clean. */
+    background-image: radial-gradient(hsl(30 20% 30% / 0.05) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  @media print {
+    body { background-image: none; }
   }
   h1, h2, h3 {
     font-family: var(--font-serif), Georgia, "Source Serif Pro", serif;

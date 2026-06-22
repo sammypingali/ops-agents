@@ -1,4 +1,5 @@
 import { TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
 import { LeadRowActions } from "@/components/lead-row-actions";
 
@@ -11,25 +12,27 @@ import { LeadRowActions } from "@/components/lead-row-actions";
 // Lead origin badge. Maps the stored source to the ops-facing label/colour:
 // platform DB vs Scout (AI discovery) vs Sourcing Index (catalog archive) vs
 // ops bulk upload.
-const SOURCE_BADGE: Record<string, { label: string; cls: string; title: string }> = {
+type BadgeVariant = "default" | "secondary" | "outline" | "success" | "warn" | "danger" | "info" | "accent";
+
+const SOURCE_BADGE: Record<string, { label: string; variant: BadgeVariant; title: string }> = {
   existing_db: {
     label: "Platform DB",
-    cls: "bg-secondary text-secondary-foreground",
+    variant: "secondary",
     title: "From the Tenkara platform database (existing supplier history).",
   },
   marketplace: {
     label: "Sourcing Index",
-    cls: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
+    variant: "accent",
     title: "Matched from the Sourcing Index catalog archive.",
   },
   ai_discovery: {
     label: "Scout",
-    cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+    variant: "warn",
     title: "Discovered by Agent 03 (Scout) via web search — verify before promoting.",
   },
   human_bulk_upload: {
     label: "Ops upload",
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    variant: "success",
     title: "Added by ops via the suppliers CSV upload.",
   },
 };
@@ -37,14 +40,7 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string; title: string }
 export function LeadSourceBadge({ source }: { source: string | null | undefined }) {
   const s = source ? SOURCE_BADGE[source] : undefined;
   if (!s) return <span className="text-muted-foreground">{source ?? "—"}</span>;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.cls}`}
-      title={s.title}
-    >
-      {s.label}
-    </span>
-  );
+  return <Badge variant={s.variant} title={s.title}>{s.label}</Badge>;
 }
 
 export function LeadRichHeaders({ showOrg = true }: { showOrg?: boolean }) {
@@ -173,33 +169,24 @@ export function LeadRichRow({
         )}
         {(r.grade ?? r.payload?.grade) && (
           <div className="mt-0.5">
-            <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide">
-              {r.grade ?? r.payload?.grade}
-            </span>
+            <Badge variant="secondary">{r.grade ?? r.payload?.grade}</Badge>
           </div>
         )}
       </TableCell>
       <TableCell className="align-top">
         {signal ? (
-          <span
-            className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
-            title={`Why this supplier surfaced as a lead${signalCount != null ? ` — seen ${signalCount}×` : ""}`}
-          >
+          <Badge variant="secondary" title={`Why this supplier surfaced as a lead${signalCount != null ? ` — seen ${signalCount}×` : ""}`}>
             {humanizeSignal(signal)}
             {signalCount != null && signalCount > 1 && <span className="ml-1 text-muted-foreground">×{signalCount}</span>}
-          </span>
+          </Badge>
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         )}
       </TableCell>
       <TableCell className="align-top">
         {marketKind ? (
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-              marketKind === "marketplace"
-                ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
-                : "bg-secondary text-secondary-foreground"
-            }`}
+          <Badge
+            variant={marketKind === "marketplace" ? "accent" : "secondary"}
             title={
               siteType === "M"
                 ? "Marketplace — online checkout, no signup"
@@ -209,7 +196,7 @@ export function LeadRichRow({
             }
           >
             {marketKind === "marketplace" ? "Marketplace" : "Direct"}
-          </span>
+          </Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
