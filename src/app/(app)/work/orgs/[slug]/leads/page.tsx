@@ -27,7 +27,6 @@ export default async function OrgLeadsPage({ params }: { params: { slug: string 
     )
     .eq("org_id", org.id)
     .eq("status", "active")
-    .order("confidence_score", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);
   let leads = (rows ?? []) as any[];

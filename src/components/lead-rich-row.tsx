@@ -63,7 +63,7 @@ export function LeadRichHeaders({ showOrg = true }: { showOrg?: boolean }) {
       <TableHead>Material</TableHead>
       <TableHead>Pricing / MOQ</TableHead>
       <TableHead>Signal</TableHead>
-      <TableHead>Confidence</TableHead>
+      <TableHead>Type</TableHead>
       <TableHead>Source</TableHead>
       {showOrg && <TableHead>Org</TableHead>}
       <TableHead>Staged</TableHead>
@@ -78,6 +78,15 @@ export function leadRichColSpan(showOrg = true): number {
   return showOrg ? 10 : 9;
 }
 
+// Marketplace vs direct (non-marketplace), derived from the scanner's site_type.
+// M = marketplace (no signup), MS = marketplace (after registration), N = direct
+// quote/RFQ only. Returns null when the lead isn't classified.
+export function leadMarketKind(siteType: string | null | undefined): "marketplace" | "direct" | null {
+  if (siteType === "M" || siteType === "MS") return "marketplace";
+  if (siteType === "N") return "direct";
+  return null;
+}
+
 export function LeadRichRow({
   r,
   canAct,
@@ -89,10 +98,10 @@ export function LeadRichRow({
 }) {
   const signal = r.payload?.signal as string | undefined;
   const signalCount = r.payload?.signal_count as number | undefined;
-  const conf = r.confidence_score != null ? Number(r.confidence_score) : null;
   const isScout = r.source === "ai_discovery";
   const sourceUrl = (r.payload?.source_url ?? r.payload?.supplier_website) as string | undefined;
   const siteType = r.payload?.site_type as "M" | "MS" | "N" | undefined;
+  const marketKind = leadMarketKind(siteType);
   const pricing = r.payload?.pack_sizes_pricing as string | undefined;
   const moq = r.payload?.moq as string | undefined;
   const completeness = r.payload?.completeness_score != null ? Number(r.payload.completeness_score) : null;
@@ -103,20 +112,6 @@ export function LeadRichRow({
       <TableCell className="font-medium align-top">
         <div className="flex items-center gap-2 flex-wrap">
           <span>{r.supplier_name ?? "—"}</span>
-          {siteType && (
-            <span
-              className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-              title={
-                siteType === "M"
-                  ? "Marketplace — online checkout, no signup"
-                  : siteType === "MS"
-                  ? "Marketplace — checkout after registration"
-                  : "Non-marketplace — quote/RFQ only"
-              }
-            >
-              {siteType}
-            </span>
-          )}
         </div>
         {(r.payload?.supplier_country || r.payload?.supplier_role) && (
           <div className="text-xs text-muted-foreground">
@@ -197,7 +192,26 @@ export function LeadRichRow({
         )}
       </TableCell>
       <TableCell className="align-top">
-        <ConfidenceBadge value={conf} />
+        {marketKind ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              marketKind === "marketplace"
+                ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
+                : "bg-secondary text-secondary-foreground"
+            }`}
+            title={
+              siteType === "M"
+                ? "Marketplace — online checkout, no signup"
+                : siteType === "MS"
+                ? "Marketplace — checkout after registration"
+                : "Direct supplier — quote / RFQ only"
+            }
+          >
+            {marketKind === "marketplace" ? "Marketplace" : "Direct"}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
         {completeness != null && (
           <div
             className="text-[10px] text-muted-foreground mt-0.5"
