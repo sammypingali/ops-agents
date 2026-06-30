@@ -14,16 +14,28 @@ const TYPE_OPTIONS = [
   { value: "direct", label: "Direct" },
 ];
 
+const countryOf = (r: any): string => (r.payload?.supplier_country ?? "").toString().trim();
+
 export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean; slug: string }) {
   const [type, setType] = useState("all");
-  const typeRows =
+  const [country, setCountry] = useState("all");
+
+  const countryOptions = [
+    { value: "all", label: "All countries" },
+    ...Array.from(new Set(rows.map(countryOf).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+      .map((c) => ({ value: c, label: c })),
+  ];
+
+  const typeRows = (
     type === "all"
       ? rows
-      : rows.filter((r: any) => (r.market_kind ?? leadMarketKind(r.payload?.site_type)) === type);
+      : rows.filter((r: any) => (r.market_kind ?? leadMarketKind(r.payload?.site_type)) === type)
+  ).filter((r: any) => (country === "all" ? true : countryOf(r) === country));
 
   const { filtered, controls } = useListFilter(typeRows, {
-    searchText: (r) => `${r.supplier_name ?? ""} ${r.material_name ?? ""} ${r.grade ?? ""}`,
-    searchPlaceholder: "supplier, material, grade…",
+    searchText: (r) => `${r.supplier_name ?? ""} ${r.material_name ?? ""} ${r.grade ?? ""} ${countryOf(r)}`,
+    searchPlaceholder: "supplier, material, grade, country…",
     sorts: [
       { value: "newest", label: "Newest", compare: byDateDesc((r: any) => r.created_at) },
       { value: "supplier", label: "Supplier (A–Z)", compare: byString((r: any) => r.supplier_name) },
@@ -36,6 +48,7 @@ export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean
     r.supplier_name ?? "",
     r.material_name ?? "",
     r.grade ?? "",
+    countryOf(r),
     r.market_kind ?? leadMarketKind(r.payload?.site_type) ?? "",
     r.source ?? "",
     r.status ?? "",
@@ -51,10 +64,14 @@ export function LeadsList({ rows, canAct, slug }: { rows: any[]; canAct: boolean
             <span className="text-xs text-muted-foreground">Type</span>
             <Select size="sm" className="min-w-[9rem]" ariaLabel="Type" value={type} onValueChange={setType} options={TYPE_OPTIONS} />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Country of origin</span>
+            <Select size="sm" className="min-w-[10rem]" ariaLabel="Country of origin" value={country} onValueChange={setCountry} options={countryOptions} />
+          </label>
         </div>
         <ListCsvButton
           filename={filenameFor(slug, "leads")}
-          headers={["Supplier", "Material", "Grade", "Type", "Source", "Status", "Created"]}
+          headers={["Supplier", "Material", "Grade", "Country", "Type", "Source", "Status", "Created"]}
           rows={csvRows}
         />
       </div>
