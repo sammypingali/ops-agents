@@ -25,11 +25,11 @@ const LOW_CONF_THRESHOLD = 0.4;
 registerAgent({
   slug: "agent-11-lead-scanner-csv-push",
   displayName: "Agent 11 - Lead Scanner CSV Push",
-  description: "Daily per-supplier CSV handoff to Andrew.",
+  description: "Daily per-supplier CSV export handoff of dropped leads.",
   async run(ctx) {
     const admin = createAdminClient();
 
-    // 0. Sweep "sent" exports older than 72h that Andrew never acked → mark failed + alert Sam.
+    // 0. Sweep "sent" exports older than 72h that were never acknowledged → mark failed + alert Sam.
     const failCutoff = new Date(Date.now() - 72 * 3600 * 1000).toISOString();
     const { data: stale } = await admin
       .from("lead_scanner_exports")
@@ -49,7 +49,7 @@ registerAgent({
           generatedAt: s.generated_at,
         }).catch((e) => console.error("[safety-alerts] export 72h alert failed:", e));
       }
-      await ctx.log(`Marked ${stale.length} stale 'sent' exports as failed (Andrew no-ack 72h).`, { step: "no_ack_sweep" });
+      await ctx.log(`Marked ${stale.length} stale 'sent' exports as failed (no ack in 72h).`, { step: "no_ack_sweep" });
     }
 
     // 1. Pull dropped/terminal leads from leads_in_flight.
@@ -195,7 +195,7 @@ registerAgent({
     ctx.setItemsProcessed(exported);
     ctx.setStatus(slackFailures > 0 ? "partial" : "success");
     ctx.setSummary(
-      `Exported ${exported} supplier CSV${exported === 1 ? "" : "s"} to Andrew · ` +
+      `Exported ${exported} supplier CSV${exported === 1 ? "" : "s"} · ` +
         `skipped ${recentSupplierIds.size} as recent · ${skippedNoisy} as noisy · ${slackFailures} Slack failures` +
         (summaries.length ? ` · ${summaries.slice(0, 5).join(", ")}${summaries.length > 5 ? "…" : ""}` : "")
     );

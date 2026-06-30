@@ -119,9 +119,9 @@ export const AGENT_SPECS: AgentSpec[] = [
     name: "Lead Scanner CSV Push",
     status: "deferred",
     cadence: "Paused",
-    purpose: "Daily per-supplier CSV handoff to Andrew (Tenkara eng) so dropped leads land back in the supplier graph.",
-    automatic: "Reads dropped/terminal leads, groups by supplier, uploads CSV to Supabase Storage, posts a Slack DM. 7-day dedup per supplier.",
-    humanInput: "Andrew confirms uploads in Slack — the confirmation gets logged in lead_scanner_exports.",
+    purpose: "Daily per-supplier CSV export handoff so dropped leads land back in the supplier graph.",
+    automatic: "Reads dropped/terminal leads, groups by supplier, uploads CSV to Supabase Storage, posts a Slack message. 7-day dedup per supplier.",
+    humanInput: "The recipient confirms uploads in Slack — the confirmation gets logged in lead_scanner_exports.",
   },
   {
     number: 12,

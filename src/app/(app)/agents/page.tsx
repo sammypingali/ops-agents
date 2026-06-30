@@ -65,7 +65,7 @@ export default async function AgentActivityPage() {
         </div>
         <div className="text-sm">
           <Link href="/agents/health" className="text-muted-foreground hover:underline">
-            {leadExportsLast24h} CSV{leadExportsLast24h === 1 ? "" : "s"} to Andrew in last 24h →
+            {leadExportsLast24h} CSV export{leadExportsLast24h === 1 ? "" : "s"} in last 24h →
           </Link>
         </div>
       </div>
@@ -132,7 +132,7 @@ function EventRow({ event }: { event: any }) {
     return (
       <TableRow>
         <TableCell><EventIcon kind="lead_export" /></TableCell>
-        <TableCell><Badge variant="default">CSV → Andrew</Badge></TableCell>
+        <TableCell><Badge variant="default">CSV export</Badge></TableCell>
         <TableCell className="font-medium" title={r.agents?.description ?? undefined}>{r.agents?.name ?? "—"}</TableCell>
         <TableCell>{r.supplier_name ?? "—"}</TableCell>
         <TableCell className="text-muted-foreground text-xs">
@@ -168,7 +168,7 @@ function EventRow({ event }: { event: any }) {
 
 function EventIcon({ kind }: { kind: "run" | "lead_export" | "csv_download" }) {
   if (kind === "run") return <span className="text-xs" title="Agent run">⚙</span>;
-  if (kind === "lead_export") return <span className="text-xs" title="CSV → Andrew">↗</span>;
+  if (kind === "lead_export") return <span className="text-xs" title="CSV export">↗</span>;
   return <span className="text-xs" title="Human CSV action">⬇</span>;
 }
 

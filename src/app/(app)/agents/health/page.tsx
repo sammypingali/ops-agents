@@ -41,7 +41,7 @@ export default async function SystemHealthPage() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-serif text-3xl tracking-tight">System health</h1>
-        <p className="text-sm text-muted-foreground mt-1">Connector status, last-run heartbeats, and the Lead Scanner handoff to Andrew.</p>
+        <p className="text-sm text-muted-foreground mt-1">Connector status, last-run heartbeats, and the Lead Scanner CSV export handoff.</p>
       </div>
 
       {isAdmin && (
@@ -111,7 +111,7 @@ export default async function SystemHealthPage() {
         </CardHeader>
         <CardContent>
           {(leadExports ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No exports yet. Agents send CSVs to Andrew via <code className="text-xs">/api/agent/lead-exports</code>.</p>
+            <p className="text-sm text-muted-foreground">No exports yet. Agents send CSV exports via <code className="text-xs">/api/agent/lead-exports</code>.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -148,7 +148,7 @@ export default async function SystemHealthPage() {
 
 function ExportStatus({ s }: { s: string }) {
   if (s === "queued") return <Badge variant="secondary">Queued</Badge>;
-  if (s === "sent") return <Badge variant="warn">Sent to Andrew</Badge>;
+  if (s === "sent") return <Badge variant="warn">Sent</Badge>;
   if (s === "acknowledged_by_andrew") return <Badge variant="default">✓ Ack'd</Badge>;
   if (s === "uploaded") return <Badge variant="success">Uploaded</Badge>;
   if (s === "failed") return <Badge variant="danger">Failed (&gt;72h)</Badge>;

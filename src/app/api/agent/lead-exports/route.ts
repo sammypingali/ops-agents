@@ -4,7 +4,7 @@ import { authenticateAgent, unauthorized } from "@/lib/agent-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { postSlackMessage } from "@/lib/slack";
 
-// Queue a per-supplier CSV for the Andrew handoff (§5.4). Phase 3 work, but
+// Queue a per-supplier CSV for the export handoff (§5.4). Phase 3 work, but
 // stubbed here so agents can already write to the queue.
 
 const schema = z.object({
@@ -12,7 +12,7 @@ const schema = z.object({
   supplier_id: z.string().optional(),
   csv_payload: z.string(),
   send_to_slack: z.boolean().default(false),
-  andrew_channel: z.string().optional(),  // override channel for Andrew's DM
+  andrew_channel: z.string().optional(),  // optional Slack channel override for the export handoff (legacy field name kept for back-compat)
 });
 
 export async function POST(request: NextRequest) {
