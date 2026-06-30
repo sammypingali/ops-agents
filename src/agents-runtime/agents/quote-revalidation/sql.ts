@@ -70,7 +70,14 @@ export async function queryOverdueRows(): Promise<OverdueRow[]> {
       LEFT JOIN operators_view ov ON ov.email = qa.email
       WHERE
         (mq.status IS NULL OR mq.status::text <> 'active')
-        AND mq.reanalyze < CURRENT_DATE + INTERVAL '7 days'
+        -- Monitor quotes due by their reanalyze date, AND quotes that never got
+        -- a reanalyze date (manually added, cold-solicit, or onboarded-client
+        -- quotes) once they've aged past a default validity window — otherwise
+        -- they fall into a void and are never re-quoted.
+        AND (
+          mq.reanalyze < CURRENT_DATE + INTERVAL '7 days'
+          OR (mq.reanalyze IS NULL AND (mq.quote_date IS NULL OR mq.quote_date < CURRENT_DATE - INTERVAL '90 days'))
+        )
         AND s.poc_email IS NOT NULL
         AND s.poc_email <> ''
         -- Drop contacts whose poc_email isn't a single valid address
