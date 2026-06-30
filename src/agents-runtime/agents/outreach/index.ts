@@ -1,6 +1,6 @@
 import { registerAgent } from "../../registry";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getOrgOperatorPool, pickSupplierOperator, type OperatorRef } from "@/lib/operator-assignment";
+import { getOrgOperatorPool, resolveSupplierOperatorId, getSupplierAssignments, type OperatorRef } from "@/lib/operator-assignment";
 import { classifyClient } from "../quote-revalidation/config";
 import { runOutreachForLead } from "./run-outreach";
 import { suppliersWithPriorRelationship } from "@/lib/tenkara-relationships";
@@ -100,10 +100,13 @@ registerAgent({
       }
     }
 
-    // Operator pool per org — drafts get a sticky-random operator by supplier.
+    // Operator pool + manual assignments per org. A draft's operator is the
+    // supplier's manual assignment if ops claimed it, else sticky-random.
     const poolByOrg = new Map<string, OperatorRef[]>();
+    const assignmentsByOrg = new Map<string, Map<string, string>>();
     for (const oid of orgIds) {
       poolByOrg.set(oid, await getOrgOperatorPool(admin, oid).catch(() => []));
+      assignmentsByOrg.set(oid, await getSupplierAssignments(admin, oid).catch(() => new Map()));
     }
 
     // 3. Filter to leads we can actually draft for.
@@ -151,9 +154,10 @@ registerAgent({
         mode: cls.mode,
         ghostBrand: cls.ghostBrand,
         clientOrgName: org.name,
-        // Sticky-random by supplier within the org; fall back to the org's primary.
+        // Manual supplier assignment wins; else sticky-random; else org primary.
         assignedOperator:
-          pickSupplierOperator(poolByOrg.get(lead.org_id) ?? [], lead.supplier_id)?.id ?? org.primary_user_id,
+          resolveSupplierOperatorId(assignmentsByOrg.get(lead.org_id) ?? new Map(), poolByOrg.get(lead.org_id) ?? [], lead.supplier_id) ??
+          org.primary_user_id,
       });
     }
 

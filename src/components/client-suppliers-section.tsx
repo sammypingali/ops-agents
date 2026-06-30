@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { useListFilter, byString } from "@/components/use-list-filter";
 import { useState } from "react";
 import type { ClientSuppliers, ClientSupplier, SupplierApproval } from "@/lib/client-suppliers";
+import { SupplierOperatorAssign } from "@/components/supplier-operator-assign";
 
 const STATUS_META: Record<SupplierApproval, { label: string; variant: "success" | "warn" | "secondary" }> = {
   approved: { label: "Approved", variant: "success" },
@@ -28,7 +29,23 @@ function StatusBadge({ s }: { s: SupplierApproval }) {
   return <Badge variant={m.variant}>{m.label}</Badge>;
 }
 
-export function ClientSuppliersSection({ suppliers, owners }: { suppliers: ClientSuppliers; owners?: Record<string, string> }) {
+export function ClientSuppliersSection({
+  suppliers,
+  orgId,
+  autoNames,
+  assignments,
+  operatorOptions,
+  operatorNames,
+  canAct,
+}: {
+  suppliers: ClientSuppliers;
+  orgId: string;
+  autoNames?: Record<string, string>;   // sticky-random default owner name per supplier
+  assignments?: Record<string, string>; // manual operator_id per supplier
+  operatorOptions?: { id: string; name: string }[];
+  operatorNames?: Record<string, string>; // operator_id → name (for read-only display)
+  canAct?: boolean;
+}) {
   const all: ClientSupplier[] = [
     ...suppliers.approved,
     ...suppliers.pending_review,
@@ -90,7 +107,21 @@ export function ClientSuppliersSection({ suppliers, owners }: { suppliers: Clien
                     </TableCell>
                     <TableCell><StatusBadge s={s.approval} /></TableCell>
                     <TableCell className="text-xs">
-                      {owners?.[s.id] ? <Badge variant="outline">{owners[s.id]}</Badge> : <span className="italic text-muted-foreground">Unassigned</span>}
+                      {canAct ? (
+                        <SupplierOperatorAssign
+                          orgId={orgId}
+                          supplierId={s.id}
+                          assignedId={assignments?.[s.id] ?? null}
+                          autoName={autoNames?.[s.id] ?? null}
+                          options={operatorOptions ?? []}
+                        />
+                      ) : assignments?.[s.id] ? (
+                        <Badge variant="outline">{operatorNames?.[assignments[s.id]] ?? "Assigned"}</Badge>
+                      ) : autoNames?.[s.id] ? (
+                        <Badge variant="outline">{autoNames[s.id]} <span className="text-muted-foreground">(auto)</span></Badge>
+                      ) : (
+                        <span className="italic text-muted-foreground">Unassigned</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{s.poc_email ?? s.poc_name ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-xs max-w-xs truncate" title={s.approval_notes ?? undefined}>

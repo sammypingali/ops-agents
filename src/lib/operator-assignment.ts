@@ -63,6 +63,32 @@ export async function getOrgOperatorPool(
   return pool.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true))).sort((a, b) => a.id.localeCompare(b.id));
 }
 
+// Manual supplier→operator assignments for an org (supplier_id → operator_id),
+// from the supplier_assignment table. These OVERRIDE the sticky-random default
+// when present — an operator explicitly claimed the supplier.
+export async function getSupplierAssignments(admin: SupabaseClient, orgId: string): Promise<Map<string, string>> {
+  const { data } = await admin
+    .from("supplier_assignment")
+    .select("supplier_id, operator_id")
+    .eq("org_id", orgId);
+  const m = new Map<string, string>();
+  for (const r of (data ?? []) as { supplier_id: string; operator_id: string }[]) {
+    if (r.supplier_id && r.operator_id) m.set(r.supplier_id, r.operator_id);
+  }
+  return m;
+}
+
+// Resolve the operator id for a supplier: a manual assignment wins; otherwise
+// fall back to the sticky-random pick over the pool.
+export function resolveSupplierOperatorId(
+  manual: Map<string, string>,
+  pool: OperatorRef[],
+  supplierId: string | null | undefined
+): string | null {
+  if (supplierId && manual.has(supplierId)) return manual.get(supplierId)!;
+  return pickSupplierOperator(pool, supplierId)?.id ?? null;
+}
+
 // Map every supplier id to its owning operator for an org, using the pool.
 export function operatorBySupplier(pool: OperatorRef[], supplierIds: (string | null | undefined)[]): Record<string, OperatorRef> {
   const out: Record<string, OperatorRef> = {};
