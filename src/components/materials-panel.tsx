@@ -20,17 +20,36 @@ function fmtQty(qty: number | null, unit: string | null): string {
   return `${qty.toLocaleString()}${unit ? ` ${unit}` : ""}`;
 }
 
-// A material's grade is a "gap" when it's missing OR too basic — e.g. just a
-// purity spec ("100% purity", "99%") that doesn't say which form/grade (HCl,
-// base, USP, anhydrous…), since a name alone can map to several products.
-function gradeGap(grade: string | null | undefined): "missing" | "weak" | null {
+// Recognized grade/standard/form tokens — a grade that includes one of these is
+// specific enough. Used to spot ambiguous short codes (e.g. "GBB") that aren't a
+// real standard and don't say which form the client actually needs.
+const KNOWN_GRADE_TOKENS = new Set([
+  "usp", "fcc", "acs", "bp", "ep", "jp", "ph", "eur", "nf", "ip", "reagent", "analytical", "lab",
+  "food", "feed", "pharma", "pharmaceutical", "cosmetic", "cosmetics", "technical", "tech", "industrial",
+  "agricultural", "electronic", "medical", "kosher", "halal", "organic", "natural", "synthetic",
+  "anhydrous", "monohydrate", "dihydrate", "hydrous", "hcl", "base", "salt", "sulfate", "sulphate",
+  "powder", "granular", "granules", "crystal", "crystalline", "flake", "flakes", "liquid", "solution",
+  "pellet", "pellets", "fine", "coarse", "micronized", "grade",
+]);
+
+// A material's grade is a "gap" when it's missing, too basic (purity only), or
+// ambiguous — a short code/abbreviation that names no recognized form/standard
+// (e.g. "GBB"), since the client needs to say which type sourcing should match.
+function gradeGap(grade: string | null | undefined): "missing" | "weak" | "ambiguous" | null {
   const g = (grade ?? "").trim().toLowerCase();
   if (!g) return "missing";
   // Only a purity/percentage value, no form descriptor → too basic.
   const purityOnly =
     /^[≥>~\s]*\d+(\.\d+)?\s*%?\s*(min|minimum)?\s*(purity|pure)?$/.test(g) ||
     /^(purity|pure|assay)\s*[:\-]?\s*[≥>~]?\s*\d+(\.\d+)?\s*%?$/.test(g);
-  return purityOnly ? "weak" : null;
+  if (purityOnly) return "weak";
+  // Ambiguous: a single short token (≤4 chars, no digits) that isn't a known
+  // standard/form — e.g. "GBB". Multi-word or recognized grades are fine.
+  const tokens = g.split(/[\s,/]+/).filter(Boolean);
+  const hasKnown = tokens.some((t) => KNOWN_GRADE_TOKENS.has(t));
+  const hasDigit = /\d/.test(g);
+  if (!hasKnown && !hasDigit && tokens.length === 1 && tokens[0].length <= 4) return "ambiguous";
+  return null;
 }
 
 function fmtDate(d: string | null): string {
@@ -162,7 +181,7 @@ export function MaterialsPanel({
         return (
           <div className="rounded-lg border border-amber-300/60 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
             <span className="font-medium">{gaps.length} material{gaps.length === 1 ? "" : "s"} need a clearer grade.</span>{" "}
-            A missing grade or a bare purity % (e.g. “100% purity”) doesn&apos;t say which form (HCl, base, USP, anhydrous…). Specify it on{" "}
+            A missing grade, a bare purity % (e.g. “100% purity”), or an ambiguous code (e.g. “GBB”) doesn&apos;t say which form/type (HCl, base, USP, anhydrous…). Specify it on{" "}
             {gaps.slice(0, 4).map((m) => m.label).join(", ")}
             {gaps.length > 4 ? `, +${gaps.length - 4} more` : ""} so sourcing matches the right product.
           </div>
@@ -313,6 +332,15 @@ function MaterialRow({
                   <Badge variant="secondary">{m.grade}</Badge>
                   <Badge variant="warn" title="Too basic — a purity % alone doesn't say which form/grade (HCl, base, USP, anhydrous…). Specify it so sourcing matches the right product.">
                     too basic
+                  </Badge>
+                </span>
+              );
+            if (gap === "ambiguous")
+              return (
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="secondary">{m.grade}</Badge>
+                  <Badge variant="warn" title="Looks incomplete — this code doesn't say which grade/form (e.g. USP, food, HCl, anhydrous, powder). Which type does the client need?">
+                    which type?
                   </Badge>
                 </span>
               );
